@@ -1,0 +1,1984 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Last Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: full-bleed raymarched scene; start panel sits low and left, scene stays visible behind it. */
+:root {
+  --dusk: #15102b;
+  --ink: #fbeee3;
+  --ink-dim: #d6c0cb;
+  --ember: #ff8f4f;
+  --glow: #ffd0a0;
+  --glass: rgba(21, 16, 43, 0.58);
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--dusk);
+  color: var(--ink);
+  font-family: var(--font-display);
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.menu {
+  position: fixed; inset: 0;
+  display: flex; align-items: flex-end;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  transition: opacity 0.9s ease;
+}
+.menu.hidden { opacity: 0; pointer-events: none; }
+.scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top right, rgba(21,16,43,0.82) 0%, rgba(21,16,43,0.45) 38%, rgba(21,16,43,0) 70%);
+}
+.panel {
+  position: relative; min-width: 0;
+  width: min(30rem, 100%);
+  padding: 0 0 max(0px, env(safe-area-inset-bottom, 0px)) clamp(0px, 3vw, 40px);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.eyebrow {
+  margin: 0; font-family: var(--font-mono); font-size: 0.75rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--glow);
+}
+h1 {
+  margin: 0; font-weight: 700; font-size: clamp(2.6rem, 9vw, 4.6rem);
+  line-height: 0.96; letter-spacing: -0.025em; text-wrap: balance;
+}
+.lede { margin: 0; max-width: 26rem; color: var(--ink-dim); font-size: 1.05rem; line-height: 1.45; }
+.keys {
+  margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr;
+  gap: 10px 18px; align-items: center; font-size: 0.98rem;
+}
+.keys dt { color: var(--ink-dim); }
+.keys dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+kbd {
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink);
+  background: var(--glass); border: 1px solid rgba(255,208,160,0.35);
+  border-bottom-width: 2px; border-radius: 5px; padding: 2px 8px; min-width: 1.4em; text-align: center;
+}
+.or { color: var(--ink-dim); font-size: 0.85rem; }
+button#go {
+  align-self: flex-start; margin-top: 8px;
+  font: 700 1.05rem var(--font-display); letter-spacing: 0.01em;
+  color: #2a1204; background: var(--ember);
+  border: 0; border-radius: 999px; padding: 13px 28px; cursor: pointer;
+  box-shadow: 0 6px 26px rgba(255,143,79,0.35);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+button#go:disabled { opacity: 0.55; cursor: progress; transform: none; }
+button#go:hover:not(:disabled) { background: #ffa56f; transform: translateY(-1px); }
+button#go:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+.fine { margin: 2px 0 0; font-size: 0.8rem; color: var(--ink-dim); opacity: 0.8; }
+#fail {
+  position: fixed; inset: 0; display: grid; place-items: center; padding: 24px;
+  background: var(--dusk); color: var(--ink); text-align: center; font-size: 1.1rem; line-height: 1.5;
+}
+#fail[hidden], .menu[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .menu, button#go { transition: none; } }
+#splash { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  background: linear-gradient(to bottom, #1b1537 0%, #5b3a66 55%, #e58a5f 100%); color: #fff4e8; transition: opacity .6s ease; font-family: inherit; }
+#splash.done { opacity: 0; pointer-events: none; }
+#splash h2 { margin: 0; font-size: clamp(2rem, 8vw, 3.6rem); font-weight: 700; letter-spacing: 0.04em; }
+#splash .bar { width: min(18rem, 60vw); height: 4px; border-radius: 2px; background: rgba(255,244,232,0.2); overflow: hidden; }
+#splash .bar i { display: block; height: 100%; width: 4%; background: #ffb078; border-radius: 2px; transition: width .35s ease-out; }
+</style>
+
+<div id="splash"><h2>Last Run</h2><div class="bar"><i id="splashBar"></i></div></div>
+<canvas id="gl"></canvas>
+<div class="menu" id="menu">
+  <div class="scrim"></div>
+  <section class="panel">
+    <h1>Last Run</h1>
+    <dl class="keys">
+      <dt>Carve</dt>
+      <dd><kbd>A</kbd><kbd>D</kbd><span class="or">or</span><kbd>&larr;</kbd><kbd>&rarr;</kbd><span class="or">or drag</span></dd>
+      <dt>Hop</dt>
+      <dd><kbd>Space</kbd><span class="or">or tap</span></dd>
+      <dt>Tuck for speed</dt>
+      <dd><kbd>W</kbd><span class="or">or</span><kbd>&uarr;</kbd><span class="or">or hold</span></dd>
+      <dt>Ease off</dt>
+      <dd><kbd>S</kbd><span class="or">or</span><kbd>&darr;</kbd></dd>
+      <dt>Sound</dt>
+      <dd><kbd>M</kbd></dd>
+      <dt>This screen</dt>
+      <dd><kbd>Esc</kbd></dd>
+    </dl>
+    <button id="go" type="button" disabled>Loading…</button>
+  </section>
+</div>
+<div id="fail" hidden>This game needs WebGL2, which this browser or device does not offer. Try a recent Chrome, Edge, Firefox or Safari.</div>
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+uniform vec2 uRes;
+uniform vec2 uJit;      // sub-pixel jitter for temporal anti-aliasing
+uniform float uTaa;     // 1 when the temporal resolve pass is used
+uniform float uTime;
+uniform vec3 uCamPos, uCamR, uCamU, uCamF;
+uniform float uFocal;
+uniform vec3 uRPos, uRX, uRY, uRZ;
+uniform float uCrouch, uSteer, uAir, uSpeed;
+uniform float uRzB;   // world z of the local origin, modulo 65536 (landscape character repeats only that far)
+uniform float uRz;   // world z of the local origin, modulo 16384 m (the hill repeats only that far)
+uniform vec4 uTrail[48];
+uniform vec4 uSpray[72];
+
+const float W = 6.283185307 / 2048.0;   // terrain repeats every 2048 m in x and z
+const float CELL = 10.24;               // tree grid, 200 cells per repeat
+const float TMAX = 360.0;
+const vec3 SUN = normalize(vec3(0.55, 0.12, 0.83));
+const vec3 SUNC = vec3(1.0, 0.53, 0.23);
+
+// ---------- hashing / noise ----------
+// Integer hash: the JS physics mirrors it bit for bit so trees collide where they are drawn.
+uint ihash(uint x) {
+  x ^= x >> 16u; x *= 0x7feb352du; x ^= x >> 15u; x *= 0x846ca68bu; x ^= x >> 16u;
+  return x;
+}
+float u2f(uint h) { return float(h >> 8u) / 16777216.0; }
+float hash21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash21(i), hash21(i + vec2(1, 0)), f.x), mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; }
+  return s;
+}
+
+// ---------- terrain (mirrored exactly in the JS physics) ----------
+// biome field: slow regions of dense forest, open meadows, wild or gentle ground; period 65536 m along the slope
+float bioAt(float x, float z) { float zb = z + uRzB; return 0.6 * sin(W * 0.28125 * zb + 1.1 + W * x) + 0.4 * sin(W * 0.15625 * zb + 2.3 - W * x); }
+float forestAt(float x, float z) { float zz = z + uRz;
+  float a = sin(W * 6.0 * x + 0.7) * sin(W * 4.75 * zz + 2.1);
+  float b = sin(W * 13.0 * x + W * 11.125 * zz + 0.3);
+  return 0.5 + 0.5 * (0.7 * a + 0.3 * b) + 0.3 * bioAt(x, z);
+}
+// Terraces: where edgeG crosses zero the snow steps down (and, on the far side of each band, gently up again).
+// The same field marks where the ground is "interesting": around the drops and in the forest the surface is
+// rougher and carries mounds, on open fields it stays smooth and evenly deep.
+float edgeG(float x, float z) { float zz = z + uRz; return 0.6 * sin(W * 6.875 * zz + W * 2.0 * x + 0.4) + 0.4 * sin(W * 5.0 * x - W * 4.125 * zz + 2.0); }
+float wrapP(float d, float P) { return d - P * floor(d / P + 0.5); }
+// A snow-covered river bed (every 1024 m across) and soft ridges (every 512 m) wander down the hill.
+float chanC(float z) { float zz = z + uRz; return 35.0 * sin(W * 4.125 * zz + 0.4) + 10.0 * sin(W * 11.125 * zz + 2.0) + 300.0; }
+float chanW(float x, float z) { float d = wrapP(x - chanC(z), 1024.0); return exp(-(d * d) / 81.0); }
+float ridgeC(float z) { float zz = z + uRz; return 50.0 * sin(W * 2.875 * zz + 2.0) + 12.0 * sin(W * 9.75 * zz + 0.7) + 120.0; }
+float ridgeW(float x, float z) { float d = wrapP(x - ridgeC(z), 512.0); return exp(-(d * d) / 36.0); }
+// ---------- landforms: rare surprise sections, one candidate per 512 m cell ----------
+// types: 0 frozen tarn, 1 gorge, 2 stone stairs, 3 powder bowl, 4 scoured rocky ground
+// The two landforms nearest the camera arrive as uniforms, worked out on the CPU by the same code that drives the
+// physics: (centre x, centre z, squared bounding radius, packed type / radius / seed). Farther landforms are out of
+// the near terrain anyway (beyond ~180 m only the smooth far hill is used). They never overlap.
+uniform vec4 uZn0, uZn1;
+uniform vec2 uZH;       // for each of the two: ground level at the centre without the downhill slope (the tarn is levelled to it)
+float gZH;
+bool zUnpack(vec4 q, float x, float z, out float ty, out vec2 d, out float R, out float sd) {
+  float c = q.w;
+  float sdi = floor(c / 512.0);
+  float rem = c - sdi * 512.0;
+  float ri = floor(rem / 8.0);
+  ty = rem - ri * 8.0; R = ri + 80.0; sd = sdi / 255.0;
+  d = vec2(x - q.x, z - q.y);
+  if (ty > 0.5 && ty < 1.5) return abs(d.x) < 80.0 && abs(d.y) < R;
+  return dot(d, d) < (R + 7.0) * (R + 7.0);
+}
+bool zoneParams(float x, float z, out float ty, out vec2 d, out float R, out float sd) {
+  vec2 a = vec2(x - uZn0.x, z - uZn0.y);
+  if (dot(a, a) < uZn0.z && zUnpack(uZn0, x, z, ty, d, R, sd)) { gZH = uZH.x; return true; }
+  vec2 b = vec2(x - uZn1.x, z - uZn1.y);
+  if (dot(b, b) < uZn1.z && zUnpack(uZn1, x, z, ty, d, R, sd)) { gZH = uZH.y; return true; }
+  ty = -1.0; d = vec2(0.0); R = 100.0; sd = 0.0;
+  return false;
+}
+float zLen(vec2 d, float sd) { return length(d) + 6.0 * sin(d.x * 0.07 + sd * 10.0) * sin(d.y * 0.06 + sd * 7.0); }
+float gorgeX(vec2 d, float sd) { return 16.0 * sin(d.y * 0.04 + sd * 6.0); }
+float gorgeD(vec2 d, float sd) { return abs(d.x - gorgeX(d, sd)) + 2.5 * sin(d.y * 0.23 + sd * 20.0) + 1.5 * sin(d.y * 0.51 + d.x * 0.2); }
+float zoneMask(float x, float z, out float ty) {
+  vec2 d; float R, sd;
+  if (!zoneParams(x, z, ty, d, R, sd)) return 0.0;
+  if (ty > 0.5 && ty < 1.5) return (1.0 - smoothstep(0.6, 1.0, abs(d.y) / R)) * (1.0 - smoothstep(26.0, 56.0, abs(d.x - gorgeX(d, sd))));
+  return 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+}
+// where trees and cabins must stay away (powder bowls keep their trees)
+float zoneClear(float x, float z) { float ty; float w = zoneMask(x, z, ty); return (ty > 2.5 && ty < 3.5) ? 0.0 : w; }
+float zoneMaskAny(float x, float z) { float ty; return zoneMask(x, z, ty); }
+float rockLump(float x, float z) {
+  float l = sin(W * 45.0 * x + 0.5) * sin(W * 39.0 * z + 1.0) + 0.4 * sin(W * 91.0 * x + W * 77.0 * z);
+  return 2.2 * smoothstep(0.25, 0.95, l) + 0.7 * smoothstep(0.3, 0.9, sin(W * 131.0 * x + 1.7) * sin(W * 127.0 * z + 0.3));
+}
+// forest: fewer, separate groves, and none in the river bed
+float forestW0(float x, float z) { return smoothstep(0.57, 0.75, forestAt(x, z)) * (1.0 - smoothstep(0.2, 0.6, chanW(x, z))); }
+float forestW(float x, float z) { return forestW0(x, z) * (1.0 - smoothstep(0.1, 0.5, zoneClear(x, z))); }
+float roughAt(float g, float x, float z) { return max(1.0 - smoothstep(0.15, 0.55, abs(g)), forestW0(x, z)); }
+// Short, steep drops: a slow ramp up and a quick drop, in patches, along lines that bend across the slope.
+float rollH(float x, float z) { float zz = z + uRz;
+  float u = 22.25 * zz / 2048.0 + 5.0 * x / 2048.0 + 0.35 * sin(W * 2.875 * zz + W * 2.0 * x + 1.0);
+  float ph = u - floor(u);
+  float sawt = ph < 0.88 ? smoothstep(0.0, 0.88, ph) : 1.0 - smoothstep(0.88, 1.0, ph);
+  float pat = smoothstep(0.0, 0.5, sin(W * 4.0 * x + 1.3) * sin(W * 4.75 * zz + 0.2) + 0.1);
+  return 3.0 * sawt * pat;
+}
+// The smooth form of the hill, without the small ripples. Shadows use this one: at a 7 degree sun a ripple of
+// 0.3 m moves a shadow edge by 2-3 m, which drew long jagged "fangs" along every shadow boundary.
+float hgtCore(float x, float z) { float zz = z + uRz;
+  float h = -0.36 * z;
+  // broad regions of gentler or wilder hills, and stretches where the whole slope is flatter or steeper
+  float hs = 9.0 * sin(W * 2.25 * zz + 1.0) + 4.5 * sin(W * 4.75 * zz + 3.1)
+           + 2.8 * sin(W * 9.25 * zz + 0.3 + W * 15.0 * x)
+           + 6.0 * sin(W * 4.0 * x + 0.8) * sin(W * 2.875 * zz + 2.2)
+           + 5.0 * sin(W * 7.0 * x + 2.0) * sin(W * 6.125 * zz + 0.5);
+  h += hs * (1.0 + 0.5 * sin(W * 0.5 * zz + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
+  h += 85.0 * sin(W * 0.25 * zz + 1.3) + 40.0 * sin(W * 0.375 * zz + 4.0);
+  h -= 6.0 * smoothstep(-0.25, 0.25, edgeG(x, z));
+  h += rollH(x, z) - 2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
+  return h;
+}
+float zoneApply(float x, float z, float h, out float calm, out float clr) {
+  calm = 0.0; clr = 0.0;
+  float ty; vec2 d; float R, sd;
+  if (zoneParams(x, z, ty, d, R, sd)) {
+  if (ty < 0.5) {
+    float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+    if (w > 0.0) {
+      h += (gZH - 0.36 * (z - d.y) - 0.16 * d.y - h) * w;
+      calm = w; clr = w;
+    }
+  } else if (ty < 1.5) {
+    float env = 1.0 - smoothstep(0.55, 0.95, abs(d.y) / R);
+    h -= 9.0 * env * (1.0 - smoothstep(7.0, 19.0, gorgeD(d, sd)));
+    clr = (1.0 - smoothstep(0.6, 1.0, abs(d.y) / R)) * (1.0 - smoothstep(26.0, 56.0, abs(d.x - gorgeX(d, sd))));
+  } else if (ty < 2.5) {
+    float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+    float u = d.y / 18.0 + 0.2 * sin(d.x * 0.03 + sd * 9.0);
+    float ph = u - floor(u);
+    float saw = ph < 0.84 ? mix(ph / 0.84, smoothstep(0.0, 0.84, ph), 0.4) : 1.0 - smoothstep(0.84, 1.0, ph);
+    h += 3.2 * saw * w; clr = w;
+  } else if (ty < 3.5) {
+    float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+    h += w * (-2.0 * w + 0.9 * sin(d.x * 0.045 + sd * 8.0) * sin(d.y * 0.05 + sd * 5.0));
+    calm = w;
+  } else if (ty < 4.5) {
+    float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+    if (w > 0.0) h += w * rockLump(x, z);
+    clr = w;
+  } else if (ty < 5.5) {
+    // mesa: a raised, gently sloping table with steep stone sides
+    float l = zLen(d, sd) / R;
+    float w = 1.0 - smoothstep(0.45, 0.7, l);
+    if (w > 0.0) h += (gZH + 9.0 - 0.36 * (z - d.y) - 0.16 * d.y - h) * w;
+    clr = 1.0 - smoothstep(0.55, 1.0, l);
+  } else if (ty < 6.5) {
+    // dunes: long wind-built waves across the slope, each one a small ramp at speed
+    float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
+    h += w * (1.5 * sin(d.y * 0.22 + 0.35 * sin(d.x * 0.05 + sd * 9.0) + sd * 20.0) + 0.5 * sin(d.y * 0.5 + d.x * 0.1));
+    clr = w;
+  } else {
+    // kettle: a round bowl with a raised rim
+    float l = zLen(d, sd) / R;
+    float w = 1.0 - smoothstep(0.85, 1.0, l);
+    float rim = exp(-pow((l - 0.8) / 0.1, 2.0));
+    h += w * (-8.0 * (1.0 - smoothstep(0.3, 0.75, l)) + 2.0 * rim);
+    clr = 1.0 - smoothstep(0.55, 1.0, l);
+  }
+  }
+  return h;
+}
+float hgtBase(float x, float z) { float cm, cl; return zoneApply(x, z, hgtCore(x, z), cm, cl); }
+float hgt0(float x, float z) {
+  float fine = 1.5 * sin(W * 19.0 * z + 1.7 - W * 20.0 * x) + 0.55 * sin(W * 41.0 * z + 0.9 + W * 33.0 * x)
+             + 1.1 * sin(W * 29.0 * x + W * 13.0 * z + 2.0) + 2.2 * sin(W * 21.0 * x + 1.1) * sin(W * 17.0 * z + 0.4);
+  float env = smoothstep(0.55, 0.95, sin(W * 11.0 * z + 2.5 + W * 3.0 * x));
+  fine += env * 1.8 * sin(W * 68.0 * z + W * 2.0 * x);
+  float cm, cl;
+  float hb = zoneApply(x, z, hgtCore(x, z), cm, cl);
+  float rg = max(1.0 - smoothstep(0.15, 0.55, abs(edgeG(x, z))), forestW0(x, z) * (1.0 - smoothstep(0.1, 0.5, cl)));
+  return hb + fine * (0.3 + 0.7 * rg) * (1.0 - cm);
+}
+
+// ---------- snow mounds: smooth bumps in the snow, some with stone showing through ----------
+const float CELLR = 12.8;   // 160 cells per repeat
+float bumpOf(vec2 d, float rx, float ry) {
+  float a = max(1.0 - dot(d, d) / (rx * rx), 0.0);
+  return ry * a * a;
+}
+float rockBump(float x, float z) {
+  vec2 pos = vec2(x, z);
+  vec2 cell = floor(pos / CELLR);
+  vec2 f = pos / CELLR - cell - 0.5;
+  vec2 sg = vec2(f.x < 0.0 ? -1.0 : 1.0, f.y < 0.0 ? -1.0 : 1.0);
+  float b = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec2 c = cell + vec2(float(i & 1), float(i >> 1)) * sg;
+    uvec2 ci = uvec2(mod(c, 160.0));
+    uint h = ihash((ci.x * 668265263u) ^ (ci.y * 374761393u) ^ 0x2545f491u);
+    float r3 = u2f(ihash(h + 3u));
+    if (r3 < 0.8) {
+      vec2 cp = (c + 0.5 + (vec2(u2f(ihash(h + 1u)), u2f(ihash(h + 2u))) - 0.5) * 0.3) * CELLR;
+      vec2 d = pos - cp;
+      // few mounds on open fields, many at the drops and among the trees (decided at the cell centre)
+      if (dot(d, d) < 16.0 && r3 < 0.24 * smoothstep(0.3, 0.8, roughAt(edgeG(cp.x, cp.y), cp.x, cp.y)) && zoneMaskAny(cp.x, cp.y) < 0.25) {
+        float rx = 0.9 + 2.5 * pow(u2f(ihash(h + 4u)), 1.8);
+        b += bumpOf(d, rx, rx * (0.2 + 0.16 * u2f(ihash(h + 5u))));
+        if (u2f(ihash(h + 6u)) < 0.7) {
+          vec2 sp = (vec2(u2f(ihash(h + 7u)), u2f(ihash(h + 8u))) - 0.5) * 3.0;
+          float r2 = 0.5 + 0.6 * u2f(ihash(h + 9u));
+          b += bumpOf(pos - cp - sp, r2, r2 * 0.3);
+        }
+      }
+    }
+  }
+  return b;
+}
+float hgt(float x, float z) { return hgt0(x, z) + rockBump(x, z); }
+
+// Far away only the broad shape of the hill is kept. Its slopes are gentle, so the tracer can take long,
+// safe steps there. That removes the ragged silhouettes that came from running out of steps at the horizon.
+float hgtLOD(float x, float z) { float zz = z + uRz;
+  float h = -0.36 * z;
+  // broad regions of gentler or wilder hills, and stretches where the whole slope is flatter or steeper
+  float hs = 9.0 * sin(W * 2.25 * zz + 1.0) + 4.5 * sin(W * 4.75 * zz + 3.1)
+           + 2.8 * sin(W * 9.25 * zz + 0.3 + W * 15.0 * x)
+           + 6.0 * sin(W * 4.0 * x + 0.8) * sin(W * 2.875 * zz + 2.2)
+           + 5.0 * sin(W * 7.0 * x + 2.0) * sin(W * 6.125 * zz + 0.5);
+  h += hs * (1.0 + 0.5 * sin(W * 0.5 * zz + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
+  h += 85.0 * sin(W * 0.25 * zz + 1.3) + 40.0 * sin(W * 0.375 * zz + 4.0);
+  h -= 6.0 * smoothstep(-0.25, 0.25, edgeG(x, z));
+  h += -2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
+  return h;
+}
+float hgtT(float x, float z, float tf) {
+  float lod = smoothstep(120.0, 180.0, tf);
+  if (lod <= 0.0) return hgt(x, z);
+  if (lod >= 1.0) return hgtLOD(x, z);
+  return mix(hgt(x, z), hgtLOD(x, z), lod);
+}
+
+// gSh: while shading (shadow and AO rays) the bounding volumes of trees and the rider are NOT solids. They only
+// limit the step length, through gRB. Used as distances they printed rings, squares and false penumbras on the snow.
+bool gSh = false; float gRB = 1e5; bool gReal = true;   // gReal: the last mapK distance came from real geometry, not a bounding volume
+
+// ---------- snow-covered tiered conifers on bare trunks ----------
+float epsAt(float t) { return 0.0008 * t + 0.002 + 0.0008 * max(t - 150.0, 0.0); }
+
+float sdE(vec3 p, vec3 c, float a, float b) { return (length((p - c) * vec3(1.0, a / b, 1.0)) - a) * (b / a) * 0.9; }
+// typ 0: spruce (broad tiers), 1: slim fir (taller, narrower, more tiers), 2: pine (tall bare trunk, layered crown)
+vec2 treeSDF(vec3 q, float s, float seed, vec3 pw, float asp, float typ) {
+  // soft branches: they part around the rider and thin out around the camera
+  // (the thinning is only for the primary view. Shadow and AO rays must see the full tree: with it, every shadow
+  //  falling within 3 m of the rider or 4.5 m of the camera had its foliage eaten away and came out as ragged fangs)
+  float part = gSh ? 0.0 : max(smoothstep(3.2, 0.7, length(pw - uRPos - vec3(0.0, 0.9, 0.0))), smoothstep(4.5, 1.8, length(pw - uCamPos)));
+  // the crowns sway in the gusts (same gust curve as the wind sound), a little more for big trees
+  float gust = max(0.0, sin(uTime * 0.23) * sin(uTime * 0.071 + 1.0));
+  vec2 swv = vec2(0.30 * gust + 0.04 * sin(uTime * 1.3 + seed * 40.0), 0.05 * sin(uTime * 0.9 + seed * 23.0)) * s;
+  if (typ > 1.5) {
+    float yb = 1.5 * s + 1.0;
+    float k = 1.0 - 0.9 * part;
+    float ca = cos(seed * 20.0), sa = sin(seed * 20.0);
+    vec3 qs = q - vec3(swv.x, 0.0, swv.y) * clamp((q.y - yb) / (4.0 * s), 0.0, 1.0);
+    float cr = sdE(qs, vec3(0.0, yb + 0.6 * s, 0.0), 2.5 * s * k, 0.95 * s * k);
+    cr = min(cr, sdE(qs, vec3(0.5 * s * ca, yb + 1.8 * s, 0.5 * s * sa), 1.9 * s * k, 0.8 * s * k));
+    cr = min(cr, sdE(qs, vec3(-0.45 * s * sa, yb + 2.85 * s, 0.45 * s * ca), 1.3 * s * k, 0.65 * s * k));
+    float tr = max(length(q.xz) - (0.30 * s + 0.05), q.y - (yb + 1.4 * s)) * 0.8;
+    return cr < tr ? vec2(cr, 2.0) : vec2(tr, 3.0);
+  }
+  float fir = typ > 0.5 ? 1.0 : 0.0;
+  float H = mix(9.0, 12.5, fir) * s * (0.85 + 0.3 * asp), R0 = mix(2.6, 1.75, fir) * s * (1.0 - 0.2 * asp);
+  float y0 = 0.9 + 0.5 * s;
+  float y = q.y - y0;                        // branches start well below head height
+  float ty = y / H;
+  float ph = fract(ty * mix(5.0, 8.0, fir));
+  float rad = R0 * pow(max(1.0 - ty, 0.0), mix(1.0, 0.85, fir)) * (mix(0.48, 0.42, fir) + mix(0.52, 0.58, fir) * (1.0 - ph));
+  rad *= 1.0 + 0.06 * sin(4.0 * q.x + 3.0 * q.z + seed * 20.0);
+  rad *= 1.0 - 0.92 * part;
+  rad = max(rad, 0.0045 * length(pw - uCamPos) * clamp((1.0 - ty) * 2.5, 0.0, 1.0));   // far away a needle-thin tip is sub-pixel and sparkles, so keep it blunt
+  float ct = clamp(ty, 0.0, 1.0);
+  float dr = length(q.xz - swv * ct * ct) - rad;
+  float dv = max(-y, y - H);
+  float fol = max(dr, dv) * 0.5;
+  float trunk = max(length(q.xz) - (0.32 * s + 0.08 * (1.0 - clamp(q.y / 6.0, 0.0, 1.0))), q.y - (y0 + 0.4 * H)) * 0.8;
+  return fol < trunk ? vec2(fol, 2.0) : vec2(trunk, 3.0);
+}
+
+vec2 trees(vec3 p) {
+  vec2 cell = floor(p.xz / CELL);
+  vec2 f = p.xz / CELL - cell - 0.5;
+  vec2 sg = vec2(f.x < 0.0 ? -1.0 : 1.0, f.y < 0.0 ? -1.0 : 1.0);
+  vec2 best = vec2(1e5, 1.0);   // id 1: a bare bound (no tree there) must never be shaded as foliage
+  for (int i = 0; i < 4; i++) {
+    vec2 c = cell + vec2(float(i & 1), float(i >> 1)) * sg;
+    uvec2 ci = uvec2(mod(c, 200.0));
+    uint h = ihash((ci.x * 73856093u) ^ (ci.y * 19349663u));
+    vec2 tp = (c + 0.5 + (vec2(u2f(ihash(h + 1u)), u2f(ihash(h + 2u))) - 0.5) * 0.3) * CELL;
+    vec2 dd = p.xz - tp;
+    float hd = length(dd);
+    if (hd < 9.0) {
+      float r3 = u2f(ihash(h + 3u));
+      float dcam = length(tp - uCamPos.xz);
+      // trees are not drawn beyond 215 m. They fade into the dark forest tint on the ground first (see shade), so none pop.
+      if (r3 < 0.85 && dcam < 215.0 && r3 < forestW(tp.x, tp.y) * 0.85) {
+        float rs = u2f(ihash(h + 4u));
+        float ra = u2f(ihash(h + 5u));
+        float s = 0.4 + 0.85 * pow(rs, 1.5);
+        // each tree bounds itself with its own radius, so the distance field is honest everywhere.
+        // (A shared worst-case radius drew dark rings in the shadow and ambient occlusion around every tree cell.)
+        float rtp = u2f(ihash(h + 6u));
+        float typ = rtp < 0.60 ? 0.0 : (rtp < 0.85 ? 1.0 : 2.0);
+        float Rt = max((typ < 0.5 ? 2.6 * (1.0 - 0.2 * ra) : (typ < 1.5 ? 1.9 : 2.8)) * s * 1.07, 0.0045 * dcam + 0.05);
+        if (hd < Rt + 0.6) {
+          vec3 q = vec3(dd.x, p.y - hgt(tp.x, tp.y) + 0.6, dd.y);
+          vec2 d = treeSDF(q, s, rs, p, ra, typ);
+          // a soft drift of snow piled round the foot of the trunk (look only, the rider ignores it)
+          float dr = sdE(q, vec3(0.35 * (ra - 0.5) * s, 0.3, 0.35 * (rtp - 0.5) * s), (1.2 + 0.7 * ra) * s, 0.55 * s);
+          if (dr < d.x) d = vec2(dr, 2.0);
+          if (d.x < best.x) best = d;
+        } else {
+          gRB = min(gRB, hd - Rt);
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// ---------- the rider ----------
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+  vec3 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+float sdRoundBox(vec3 p, vec3 b, float r) {
+  vec3 q = abs(p) - b;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+}
+float smin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+vec2 rmin(vec2 a, vec2 b) { return a.x < b.x ? a : b; }
+
+// q: x = rider's left, y = up from the snow, z = travel direction. Ids: 4 coat, 5 pants, 6 board, 7 hat, 8 scarf, 9 gloves and boots, 10 skin
+vec2 riderMap(vec3 q) {
+  float c = uCrouch, st = uSteer;
+  vec3 bq = q - vec3(0.0, 0.05, 0.0);
+  bq.y -= pow(max(abs(bq.z) - 0.5, 0.0), 2.0) * 1.5;
+  vec2 r = vec2(sdRoundBox(bq, vec3(0.125, 0.010, 0.80), 0.018), 6.0);
+  float hipY = 0.95 - 0.26 * c;
+  vec3 hip = vec3(0.02 * c, hipY, 0.0);
+  float legs = 1e5, boots = 1e5;
+  for (int i = 0; i < 2; i++) {
+    float zf = i == 0 ? 0.30 : -0.30;
+    vec3 foot = vec3(0.0, 0.11, zf);
+    vec3 hp = vec3(0.0, hipY, zf * 0.35);
+    vec3 knee = mix(foot, hp, 0.5) + vec3(0.10 + 0.16 * c, 0.0, 0.0);
+    legs = min(legs, min(sdCapsule(q, foot, knee, 0.075), sdCapsule(q, knee, hp, 0.088)));
+    boots = min(boots, sdCapsule(q, foot + vec3(0.0, -0.03, -0.07), foot + vec3(0.0, 0.0, 0.08), 0.07));
+  }
+  r = rmin(r, vec2(legs, 5.0));
+  r = rmin(r, vec2(boots, 9.0));
+  vec3 sh = vec3(0.05 + 0.05 * c, hipY + 0.50 - 0.07 * c, 0.0);
+  float coat = sdCapsule(q, hip + vec3(0.0, 0.02, 0.0), sh, 0.165);
+  coat = smin(coat, sdCapsule(q, sh + vec3(0.0, 0.0, 0.2), sh + vec3(0.0, 0.0, -0.2), 0.105), 0.06);
+  vec3 handF = sh + vec3(0.10, -0.22 - 0.10 * uAir - st * 0.14, 0.60);
+  vec3 handB = sh + vec3(0.05, -0.30 + 0.12 * uAir + st * 0.14, -0.52 - 0.04 * sin(uTime * 3.0));
+  coat = smin(coat, sdCapsule(q, sh + vec3(0.0, 0.0, 0.2), handF, 0.062), 0.05);
+  coat = smin(coat, sdCapsule(q, sh + vec3(0.0, 0.0, -0.2), handB, 0.062), 0.05);
+  r = rmin(r, vec2(coat, 4.0));
+  float gl = min(length(q - handF) - 0.075, length(q - handB) - 0.075);
+  r = rmin(r, vec2(gl, 9.0));
+  vec3 hc = sh + vec3(0.0, 0.31, 0.07);
+  r = rmin(r, vec2(length(q - hc) - 0.115, 10.0));
+  float hat = max(length(q - hc - vec3(0.0, 0.03, -0.01)) - 0.138, (hc.y - 0.02) - q.y);
+  r = rmin(r, vec2(hat, 7.0));
+  r = rmin(r, vec2(length(q - hc - vec3(0.0, 0.17, -0.02)) - 0.05, 8.0));
+  vec3 nk = sh + vec3(0.0, 0.11, 0.0);
+  float scarf = sdCapsule(q, nk + vec3(0.0, 0.0, -0.08), nk + vec3(0.0, 0.0, 0.08), 0.085);
+  vec3 sa = nk + vec3(0.0, -0.01, -0.09);
+  vec3 sm = sa + vec3(0.05 * sin(uTime * 7.0), -0.03 + 0.03 * sin(uTime * 5.0 + 1.0), -0.16 - 0.01 * uSpeed);
+  vec3 sb = sm + vec3(0.08 * sin(uTime * 8.0 + 2.0), -0.05 + 0.03 * sin(uTime * 6.0), -0.16 - 0.01 * uSpeed);
+  scarf = min(scarf, min(sdCapsule(q, sa, sm, 0.042), sdCapsule(q, sm, sb, 0.036)));
+  r = rmin(r, vec2(scarf, 8.0));
+  return r;
+}
+
+// ---------- cabins: a cosy log cabin on some open ground, one candidate per 256 m cell ----------
+bool cabinCell(vec2 cell, out vec2 cp, out float yaw) {
+  uvec2 ci = uvec2(mod(cell, 8.0));
+  uint h = ihash((ci.x * 2246822519u) ^ (ci.y * 3266489917u) ^ 0x9e3779b1u);
+  cp = (cell + vec2(0.2 + 0.6 * u2f(ihash(h + 2u)), 0.2 + 0.6 * u2f(ihash(h + 3u)))) * 256.0;
+  yaw = u2f(ihash(h + 4u)) * 6.2831853;
+  return u2f(ihash(h + 1u)) < 0.6;
+}
+bool cabinSiteOk(vec2 cp) { return zoneMaskAny(cp.x, cp.y) < 0.02 && forestAt(cp.x, cp.y) < 0.45 && chanW(cp.x, cp.y) < 0.1 && abs(edgeG(cp.x, cp.y)) > 0.5; }
+float sdBoxF(vec3 p, vec3 b) { vec3 q = abs(p) - b; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0); }
+// q: x across the gable, y up from the ground at the centre, z toward the front (door and window). Ids: 11 logs, 12 roof snow, 13 window, 14 chimney stone, 9 door
+float smx(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k; return max(a, b) + h * h * k * 0.25; }
+vec2 cabinSDF(vec3 q) {
+  vec2 r = vec2(sdBoxF(q - vec3(0.0, 0.45, 0.0), vec3(2.5, 1.95, 1.8)), 11.0);
+  // a soft, rounded blanket of snow: smooth edges, a rounded ridge and gentle lumps instead of a sharp wedge
+  float rr1 = (q.y - (2.28 + (2.95 - sqrt(q.x * q.x + 0.12)) * 0.5)) * 0.894;
+  float roof = smx(smx(rr1, 2.34 - q.y, 0.55), abs(q.z) - 2.05, 0.55) - 0.1 - 0.035 * sin(q.x * 2.6 + 0.7) * sin(q.z * 2.1 + 0.3);
+  if (roof < r.x) r = vec2(roof, 12.0);
+  float win = sdBoxF(q - vec3(-0.9, 1.3, 1.8), vec3(0.5, 0.4, 0.03));
+  if (win < r.x) r = vec2(win, 13.0);
+  float door = sdBoxF(q - vec3(0.95, 0.85, 1.8), vec3(0.4, 0.85, 0.03));
+  if (door < r.x) r = vec2(door, 9.0);
+  float ch = sdBoxF(q - vec3(1.4, 3.15, -0.7), vec3(0.3, 0.95, 0.3));
+  if (ch < r.x) r = vec2(ch, 14.0);
+  return r;
+}
+// distance to the cabin of p's cell. Bounds (far from it) go to gRB, the real shape inside.
+vec2 cabinMap(vec3 p) {
+  vec2 cp; float yaw;
+  vec2 cell = floor(p.xz / 256.0);
+  if (!cabinCell(cell, cp, yaw)) return vec2(1e5, 11.0);
+  vec2 d = p.xz - cp;
+  float hd = length(d);
+  if (hd > 9.0) { gRB = min(gRB, hd - 6.5); return vec2(1e5, 11.0); }
+  if (!cabinSiteOk(cp)) return vec2(1e5, 11.0);
+  float cy = cos(yaw), sy = sin(yaw);
+  vec3 q = vec3(d.x * cy - d.y * sy, p.y - hgt(cp.x, cp.y), d.x * sy + d.y * cy);
+  return cabinSDF(q);
+}
+// warm light from the window spilling on the snow in front of the cabin
+vec3 cabinGlow(vec3 p, vec3 n) {
+  vec2 cp; float yaw;
+  vec2 cell = floor(p.xz / 256.0);
+  if (!cabinCell(cell, cp, yaw)) return vec3(0.0);
+  vec2 d = p.xz - cp;
+  float hd = length(d);
+  if (hd > 32.0 || !cabinSiteOk(cp)) return vec3(0.0);
+  float cy = cos(yaw), sy = sin(yaw);
+  vec2 loc = vec2(d.x * cy - d.y * sy, d.x * sy + d.y * cy);     // local x, z
+  vec2 rel = loc - vec2(-0.9, 1.8);
+  float front = smoothstep(-0.5, 1.5, rel.y);                      // only in front of the window
+  float fall = exp(-dot(rel, rel) / (2.0 * 7.0 * 7.0));
+  float up = 0.35 + 0.65 * max(n.y, 0.0);
+  return vec3(2.1, 1.05, 0.38) * fall * front * up * 0.7;
+}
+
+// ---------- scene ----------
+// kT scales the terrain distance. 0.55 is safe for sphere tracing, shadows can use a value near 1.
+vec2 mapK(vec3 p, float kT) {
+  gRB = 1e5;
+  float tf = length(p - uCamPos);
+  float lod = smoothstep(120.0, 180.0, tf);
+  float h0 = lod <= 0.0 ? hgt0(p.x, p.z) : (lod >= 1.0 ? hgtLOD(p.x, p.z) : mix(hgt0(p.x, p.z), hgtLOD(p.x, p.z), lod));
+  float hh0 = p.y - h0;
+  // mounds are at most 1.3 m high, so higher up the plain heightfield bound is enough
+  float hh = hh0 >= 6.0 ? hh0 - 1.4 : (lod < 1.0 ? hh0 - (1.0 - lod) * rockBump(p.x, p.z) : hh0);
+  kT = kT < 0.9 ? mix(kT, 0.8, lod) : kT;
+  vec2 r = vec2(hh * kT, 1.0);
+  if (hh0 < 20.0) {
+    if (hh0 > 8.0) r.x = min(r.x, 5.0);
+    if (length(p - uCamPos) > 1.0 && length(p.xz - uCamPos.xz) < 225.0) {
+      vec2 t = trees(p);
+      if (t.x < r.x) r = t;
+    }
+  } else {
+    r.x = (hh0 - 17.0) * 0.5;
+  }
+  vec3 d = p - uRPos;
+  float dl = length(d);
+  if (dl < 2.6) {
+    vec2 rm = riderMap(vec3(dot(d, uRX), dot(d, uRY), dot(d, uRZ)));
+    if (rm.x < r.x) r = rm;
+  } else {
+    gRB = min(gRB, dl - 2.3);
+  }
+  if (hh0 < 20.0) {
+    vec2 cb = cabinMap(p);
+    if (cb.x < r.x) r = cb;
+  }
+  gReal = r.x <= gRB;
+  if (!gSh) r.x = min(r.x, gRB);
+  return r;
+}
+// Trees and rider only, for shadow rays. Real surface distance in .x, distance to the nearest bound in gRB.
+float mapObj(vec3 p) {
+  gRB = 1e5;
+  float r = 1e5;
+  if (length(p.xz - uCamPos.xz) < 225.0 && length(p - uCamPos) > 1.0) r = trees(p).x;
+  vec3 d = p - uRPos;
+  float dl = length(d);
+  if (dl < 2.6) r = min(r, riderMap(vec3(dot(d, uRX), dot(d, uRY), dot(d, uRZ))).x);
+  else gRB = min(gRB, dl - 2.3);
+  r = min(r, cabinMap(p).x);
+  return r;
+}
+vec2 mapM(vec3 p) { return mapK(p, 0.55); }
+float mapD(vec3 p) { return mapK(p, 0.55).x; }
+// ---------- atmosphere ----------
+// BG-BEGIN
+vec3 fogColor(vec3 rd) {
+  float s = pow(max(dot(rd, SUN), 0.0), 3.0);
+  return mix(vec3(0.30, 0.25, 0.50), vec3(1.0, 0.50, 0.27), s * 0.85 + 0.08);
+}
+
+// the smooth part of the sky: gradient, glow around the sun and the sun itself (no clouds, stars or birds)
+vec3 skyLite(vec3 rd) {
+  float y = max(rd.y, 0.0);
+  float sd = max(dot(rd, SUN), 0.0);
+  vec3 hor = vec3(1.0, 0.42, 0.18), mid = vec3(0.74, 0.30, 0.46), up = vec3(0.22, 0.19, 0.50), zen = vec3(0.04, 0.06, 0.22);
+  vec3 col = mix(hor, mid, smoothstep(0.0, 0.12, y));
+  col = mix(col, up, smoothstep(0.08, 0.42, y));
+  col = mix(col, zen, smoothstep(0.35, 1.0, y));
+  float towards = dot(normalize(rd.xz + 1e-4), normalize(SUN.xz));
+  col = mix(col * vec3(0.5, 0.58, 0.85), col, smoothstep(-0.4, 0.8, towards));
+  col += SUNC * (pow(sd, 8.0) * 0.45 + pow(sd, 60.0) * 1.2);
+  col += vec3(6.0, 4.2, 2.4) * smoothstep(0.9994, 0.9998, sd);
+  return col;
+}
+// the three mountain ranges and the haze at the horizon, laid over a sky colour
+vec3 farLayers(vec3 rd, vec3 col) {
+  vec3 haze = fogColor(rd);
+  float az = atan(rd.x, rd.z);
+  vec2 sdir = normalize(SUN.xz);
+  float lit = pow(max(dot(vec2(sin(az), cos(az)), sdir), 0.0), 3.0);
+  float m2 = 0.05 + 0.03 * sin(az * 3.7 + 5.0) + 0.016 * sin(az * 8.9 + 1.0);
+  float m1 = 0.012 + 0.04 * (0.5 + 0.5 * sin(az * 2.1 + 1.0)) + 0.018 * sin(az * 5.3 + 0.4) + 0.009 * sin(az * 11.7 + 2.0);
+  vec3 c2 = mix(vec3(0.46, 0.38, 0.60), vec3(1.0, 0.62, 0.52), lit * 0.8);
+  vec3 c1 = mix(vec3(0.27, 0.22, 0.44), vec3(0.85, 0.46, 0.40), lit * 0.7);
+  float rid = 0.5 * abs(sin(az * 7.3 + 0.8)) + 0.25 * abs(sin(az * 17.0 + 2.0)) + 0.1 * abs(sin(az * 31.0 + 0.3));
+  float m3 = 0.055 + 0.075 * rid;
+  vec3 c3 = mix(vec3(0.58, 0.47, 0.70), vec3(1.0, 0.68, 0.62), lit * 0.9);
+  c3 = mix(c3, vec3(1.0, 0.80, 0.72), smoothstep(m3 - 0.022, m3, rd.y) * (0.35 + 0.6 * lit));
+  col = mix(col, mix(c3, haze, 0.4), smoothstep(m3, m3 - 0.0025, rd.y));
+  col = mix(col, mix(c2, haze, 0.25), smoothstep(m2, m2 - 0.003, rd.y));
+  col = mix(col, mix(c1, haze, 0.15), smoothstep(m1, m1 - 0.003, rd.y));
+  col = mix(col, haze, smoothstep(0.02, -0.14, rd.y));
+  return col;
+}
+// BG-END
+
+vec3 sky(vec3 rd) {
+  float y = max(rd.y, 0.0);
+  float sd = max(dot(rd, SUN), 0.0);
+  vec3 hor = vec3(1.0, 0.42, 0.18), mid = vec3(0.74, 0.30, 0.46), up = vec3(0.22, 0.19, 0.50), zen = vec3(0.04, 0.06, 0.22);
+  vec3 col = mix(hor, mid, smoothstep(0.0, 0.12, y));
+  col = mix(col, up, smoothstep(0.08, 0.42, y));
+  col = mix(col, zen, smoothstep(0.35, 1.0, y));
+  float towards = dot(normalize(rd.xz + 1e-4), normalize(SUN.xz));
+  col = mix(col * vec3(0.5, 0.58, 0.85), col, smoothstep(-0.4, 0.8, towards));
+  col += SUNC * (pow(sd, 8.0) * 0.45 + pow(sd, 60.0) * 1.2);
+  col += vec3(6.0, 4.2, 2.4) * smoothstep(0.9994, 0.9998, sd);
+  vec2 cuv = rd.xz / (rd.y + 0.09) * vec2(0.55, 1.5);
+  float cl = smoothstep(0.48, 0.82, fbm(cuv * 1.3 + vec2(uTime * 0.01, 0.0)));
+  cl *= smoothstep(0.0, 0.14, rd.y) * (1.0 - smoothstep(0.5, 0.9, rd.y));
+  vec3 ccol = mix(vec3(0.30, 0.22, 0.46), vec3(1.0, 0.52, 0.34) * 1.5, clamp(pow(sd, 1.2) + 0.2, 0.0, 1.0));
+  col = mix(col, ccol, cl * 0.8);
+  // first stars in the dark upper sky, away from the sun
+  {
+    float vis = smoothstep(0.32, 0.7, rd.y) * (1.0 - smoothstep(0.0, 0.7, sd)) * (1.0 - 0.8 * cl);
+    if (vis > 0.01) {
+      vec3 sp = rd * 80.0;
+      vec3 ci = floor(sp);
+      float hs = hash21(ci.xy + ci.z * 37.7);
+      if (hs > 0.94) {
+        vec3 off = vec3(hash21(ci.yz + 3.1), hash21(ci.zx + 7.7), hash21(ci.xy + 1.9)) * 0.6 + 0.2;
+        float d = length(sp - ci - off);
+        float tw = 0.65 + 0.35 * sin(uTime * (2.0 + 3.0 * hs) + hs * 60.0);
+        col += vec3(0.9, 0.92, 1.0) * smoothstep(0.2, 0.0, d) * tw * vis * (0.6 + 2.0 * (hs - 0.94) * 16.0);
+      }
+    }
+  }
+  // a few birds far off, wings flapping
+  {
+    float az0 = atan(rd.x, rd.z);
+    float el = asin(clamp(rd.y, -1.0, 1.0));
+    for (int i = 0; i < 4; i++) {
+      float fi = float(i);
+      float a0 = 0.15 + 0.33 * fi + 0.014 * uTime * (0.7 + 0.15 * fi);
+      float e0 = 0.20 + 0.05 * fi + 0.012 * sin(uTime * 0.4 + fi * 2.0);
+      float dx = mod(az0 - a0 + 3.14159265, 6.2831853) - 3.14159265;
+      vec2 b = vec2(dx * cos(e0), el - e0);
+      if (abs(b.x) < 0.022 && abs(b.y) < 0.022) {
+        float flap = sin(uTime * (5.0 + fi) + fi * 3.0);
+        float wy = -abs(b.x) * (0.4 + 0.45 * flap);
+        float on = smoothstep(0.022, 0.0, abs(b.x)) * smoothstep(0.0036, 0.0014, abs(b.y - wy));
+        col = mix(col, vec3(0.10, 0.07, 0.16), on * 0.85);
+      }
+    }
+  }
+  return col;
+}
+
+vec3 farScene(vec3 rd) { return farLayers(rd, sky(rd)); }
+
+// ---------- shading helpers ----------
+float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+
+// Soft shadow, in two passes with different jobs.
+// A) Terrain and mounds: a heightfield march whose step grows with t, so it always reaches 90 m (the old loop
+//    ran out of steps after 3-10 m at this sun angle, so whether it met a ridge depended on the pixel: contour
+//    terraces). Far away the fine ripples are blended out so thin features are not under-sampled (rings).
+// B) Trees and rider: a march that only takes short steps near them. Their bounding volumes limit the step
+//    but never count as occluders.
+// The penumbra is the angular margin between the sun and the occluder, gap/t. The sun is at ~7 degrees, so
+// even perfectly flat snow has a margin of only 0.12 rad: k must be 1/(0.8*sun height), or flat sunlit snow
+// would be partly shadowed by itself.
+float softShadow(vec3 ro, vec3 rd, vec2 fc, float tHit) {
+  gSh = true;
+  float k = 1.0 / (0.8 * rd.y);
+  float res = 1.0, t = 0.12;
+  // heights are measured relative to the receiving point on the smooth hill, so the receiver's own ripples
+  // never put the ray inside the ground
+  float refH = ro.y - (hgtBase(ro.x, ro.z) + rockBump(ro.x, ro.z)) - 0.1;
+  for (int i = 0; i < 110; i++) {
+    vec3 p = ro + rd * t;
+    float lod = smoothstep(25.0, 70.0, t);
+    float h0 = lod <= 0.0 ? hgtBase(p.x, p.z) : (lod >= 1.0 ? hgtLOD(p.x, p.z) : mix(hgtBase(p.x, p.z), hgtLOD(p.x, p.z), lod));
+    if (t < 10.0) h0 += rockBump(p.x, p.z) * (1.0 - smoothstep(5.0, 10.0, t));
+    float gap = p.y - h0 - refH;
+    float mg = k * gap / t;
+    res = min(res, mg);
+    if (res < 0.01) break;
+    // coarse steps while the sun is clearly clear of the ground; fine steps near a shadow edge, where a coarse
+    // step can jump over a lip and print teeth along the boundary on steep ground
+    t += mg > 1.15 ? max(0.04 + 0.1 * t, 0.35 * gap) : max(0.02 + 0.025 * t, 0.2 * gap);
+    if (t > 90.0) break;
+  }
+  if (res >= 0.01) {
+    t = 0.12;
+    for (int i = 0; i < 40; i++) {
+      float h = mapObj(ro + rd * t);
+      res = min(res, k * h / t);
+      if (res < 0.01) break;
+      t += clamp(0.8 * min(h, gRB), 0.05, 4.0);
+      if (t > 90.0) break;
+    }
+  }
+  gSh = false;
+  res = clamp(res, 0.0, 1.0);
+  return res * res * (3.0 - 2.0 * res);
+}
+
+vec3 calcNormal(vec3 p, float t) {
+  float e = 0.0015 + 0.0012 * t;
+  vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy * mapD(p + k.xyy * e) + k.yyx * mapD(p + k.yyx * e) + k.yxy * mapD(p + k.yxy * e) + k.xxx * mapD(p + k.xxx * e));
+}
+
+float snowDetail(vec2 q) { return 0.6 * vnoise(q * 0.9) + 0.4 * vnoise(q * 2.7 + 5.0); }
+
+vec3 terrainNormal(vec3 p, float t) {
+  float e = 0.05 + 0.012 * t;     // wider at range, so tiny terrain waves do not shimmer
+  float h0 = hgtT(p.x, p.z, t);
+  vec3 n = normalize(vec3(h0 - hgtT(p.x + e, p.z, t), e, h0 - hgtT(p.x, p.z + e, t)));
+  if (t < 90.0) {
+    // soft wind-packed bumps from noise, no regular stripes
+    float d0 = snowDetail(p.xz), de = 0.15;
+    vec2 g = vec2(d0 - snowDetail(p.xz + vec2(de, 0.0)), d0 - snowDetail(p.xz + vec2(0.0, de))) / de;
+    float zty; float zwn = zoneMask(p.x, p.z, zty);
+    float calmN = (zty < 0.5 || (zty > 2.5 && zty < 3.5)) ? zwn : 0.0;
+    n = normalize(n + vec3(g.x, 0.0, g.y) * 0.04 * exp(-t * 0.04) * (1.0 - 0.8 * calmN));
+    // Exposed lips and ridges are scoured by the wind: fine ripples lying across the wind (it blows along +x).
+    float wm = max(1.0 - smoothstep(0.1, 0.45, abs(edgeG(p.x, p.z))), ridgeW(p.x, p.z));
+    wm *= 1.0 - calmN;
+    if (wm > 0.02 && t < 60.0) {
+      vec2 q0 = vec2(p.x * 0.22, p.z * 2.6);
+      float r0 = vnoise(q0) + 0.5 * vnoise(q0 * vec2(2.3, 2.1) + 7.0);
+      vec2 dq = vec2(0.15 * 0.22, 0.15 * 2.6);
+      float rx = vnoise(q0 + vec2(dq.x, 0.0)) + 0.5 * vnoise((q0 + vec2(dq.x, 0.0)) * vec2(2.3, 2.1) + 7.0);
+      float rz = vnoise(q0 + vec2(0.0, dq.y)) + 0.5 * vnoise((q0 + vec2(0.0, dq.y)) * vec2(2.3, 2.1) + 7.0);
+      n = normalize(n + vec3(r0 - rx, 0.0, r0 - rz) / 0.15 * 0.035 * wm * exp(-t * 0.04));
+    }
+  }
+  return n;
+}
+
+// Soft snow tracks. Each recorded point carries a strength (0 while airborne). The groove is a smooth profile
+// with a small raised shoulder, and its slope bends the surface normal, so the light and shade on the two
+// sides are what make it read as a furrow. Older parts of the track are shallower and wider as the snow settles.
+void trackDeform(vec2 xz, inout vec3 n, out float occ, float pw) {
+  occ = 0.0;
+  float best = 1e5, bestAge = 0.0, bestStr = 0.0, bestTurn = 0.0, bestSd = 0.0;
+  vec2 away = vec2(0.0), tang = vec2(0.0, 1.0);
+  for (int i = 0; i < 47; i++) {
+    vec4 a = uTrail[i], b = uTrail[i + 1];
+    if (a.z > 0.01 && b.z > 0.01) {
+      vec2 pa = xz - a.xy, ba = b.xy - a.xy;
+      float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-4), 0.0, 1.0);
+      vec2 dv = pa - ba * h;
+      float d = length(dv);
+      float age = float(i) / 47.0;
+      float score = d + age * 0.3;
+      if (score < best) {
+        best = score; bestAge = age; bestStr = mix(a.z, b.z, h); bestTurn = mix(a.w, b.w, h);
+        away = dv / max(d, 1e-3); tang = normalize(ba + vec2(1e-4));
+        bestSd = dot(dv, vec2(ba.y, -ba.x)) / max(length(ba), 1e-3);   // + = left of the travel direction
+      }
+    }
+  }
+  if (best > 3.0 + 1.5 * pw) return;
+  float d = best - bestAge * 0.3;
+  // Straight riding leaves a broad, shallow board print. A hard carve cuts a narrow, deeper groove and shoves
+  // a ridge of snow up on the outside of the turn.
+  float sharp = clamp(abs(bestTurn), 0.0, 1.0);
+  // a hard turn skids: the board slides sideways, so the furrow is wider, ragged and ploughs a berm up on the outside.
+  // In powder the board sinks: much deeper and wider, with soft collapsing walls.
+  float chat = sin(dot(xz, tang) * 11.0 + 3.0 * vnoise(xz * 1.3)) * 0.5 + 0.5;
+  float w = (0.2 + 0.18 * bestAge) * mix(1.0, 2.1, sharp) * (1.0 + 0.8 * pw);
+  float D = 0.11 * (1.0 - 0.7 * bestAge) * bestStr * mix(0.9, 1.8, sharp) * (1.0 + 2.6 * pw) * (1.0 + 0.4 * sharp * chat);
+  float outer = (bestSd * bestTurn < 0.0) ? 1.0 : 0.0;
+  float berm = 0.35 * mix(1.0, outer > 0.5 ? 3.6 : 0.5, sharp) * (1.0 + 0.5 * pw);
+  float g = exp(-(d / w) * (d / w));
+  float sx = (d - 2.0 * w) / (0.8 * w);
+  float sh = exp(-sx * sx);
+  float slope = D * 2.0 * d / (w * w) * g - berm * D * 2.0 * sx / (0.8 * w) * sh;
+  n = normalize(n - vec3(slope * away.x, 0.0, slope * away.y));
+  occ = g * bestStr * (1.0 - 0.6 * bestAge) * mix(0.8, 1.3, sharp);
+}
+
+vec3 shade(vec3 ro, vec3 rd, float t, float id) {
+  vec3 p = ro + rd * t;
+  vec3 n;
+  vec3 alb;
+  float farT = 0.0;
+  float iceG = 0.0;
+  float grooveOcc = 0.0;   // how far this surface has faded into the distant-forest tone
+  if (id < 1.5) {
+    // The march stops within a tolerance of the snow. At grazing angles that is a long way along the
+    // ground and shows up as stripes, so slide the hit point onto the exact surface first.
+    for (int k = 0; k < 3; k++) {
+      float e = 0.1 + 0.004 * t;
+      float h0 = hgtT(p.x, p.z, t);
+      vec2 gr = vec2(hgtT(p.x + e, p.z, t) - h0, hgtT(p.x, p.z + e, t) - h0) / e;
+      float dfdt = rd.y - gr.x * rd.x - gr.y * rd.z;
+      float lim = 0.02 * t + 0.3;
+      float tn = t - clamp((p.y - h0) / (abs(dfdt) > 0.02 ? dfdt : (dfdt < 0.0 ? -0.02 : 0.02)), -lim, lim);
+      vec3 pn = ro + rd * tn;
+      // only accept a step that really lands closer to the surface. At a sharp lip a long slide along a
+      // grazing ray can jump onto the terrace below, which showed up as a dashed dark line along the crest.
+      if (abs(pn.y - hgtT(pn.x, pn.z, tn)) < abs(p.y - h0)) { t = tn; p = pn; } else break;
+    }
+    n = terrainNormal(p, t);
+    alb = vec3(0.90, 0.93, 1.0);
+    alb *= 0.93 + 0.07 * vnoise(p.xz * 0.35);
+    alb *= vec3(1.0 + 0.035 * (vnoise(p.xz * 0.045) - 0.5), 1.0, 1.0 - 0.04 * (vnoise(p.xz * 0.045 + 9.0) - 0.5));   // faint warm and cool patches in the snow
+    alb = mix(alb, vec3(0.78, 0.87, 1.0), 0.4 * chanW(p.x, p.z));   // the river bed: slightly cooler, smoother snow
+    // landforms: ice on the tarn, rock on steep gorge walls and stair faces, bare ground where the snow is thin, soft powder
+    float zt; float zw = zoneMask(p.x, p.z, zt);
+    float iceM = 0.0, rockM = 0.0;
+    if (zw > 0.0) {
+      vec2 zd; float zR, zsd; zoneParams(p.x, p.z, zt, zd, zR, zsd);
+      float stp = 1.0 - smoothstep(0.55, 0.86, n.y + 0.25 * (vnoise(p.xz * 1.3) - 0.5));
+      if (zt < 0.5) iceM = 1.0 - smoothstep(0.42, 0.5, (zLen(zd, zsd) + 5.0 * (vnoise(p.xz * 0.08) - 0.5)) / zR);
+      else if (zt < 2.5 || zt > 4.5) rockM = (zt > 5.5 && zt < 6.5) ? 0.0 : stp * smoothstep(0.05, 0.4, zw);
+      else if (zt < 3.5) alb = mix(alb, vec3(0.80, 0.90, 1.04), zw * 0.55);
+      else rockM = zw * max(smoothstep(0.55, 0.9, rockLump(p.x, p.z) / 2.2 + 0.25 * vnoise(p.xz * 1.1)), stp);
+    }
+    iceG = iceM;
+    if (iceM > 0.0) {
+      float dust = smoothstep(0.5, 0.75, vnoise(p.xz * 0.11) + 0.45 * vnoise(p.xz * 0.5) - 0.2);
+      float crack = 1.0 - smoothstep(0.0, 0.025, abs(vnoise(p.xz * 0.4 + 3.0) - 0.5));
+      vec3 ice = mix(vec3(0.16, 0.30, 0.42), vec3(0.88, 0.94, 1.02), max(dust, crack * 0.35));
+      alb = mix(alb, ice, iceM);
+    }
+    if (rockM > 0.0) {
+      float band = 0.5 + 0.5 * sin(p.y * 2.6 + 2.0 * vnoise(p.xz * 0.35));
+      vec3 rk = mix(vec3(0.36, 0.26, 0.21), vec3(0.19, 0.17, 0.20), band) * (0.75 + 0.5 * vnoise(p.xz * 4.0 + p.y));
+      alb = mix(alb, rk, rockM * 0.96);
+    }
+    alb *= 1.0 + vec3(0.025, 0.0, -0.035) * bioAt(p.x, p.z);   // meadows run a touch warmer, high rock country a touch colder
+    float mound = rockBump(p.x, p.z);
+    float steep = 1.0 - smoothstep(0.62, 0.9, n.y + 0.3 * (vnoise(p.xz * 2.2) - 0.5));
+    alb = mix(alb, vec3(0.30, 0.29, 0.33) * (0.75 + 0.5 * vnoise(p.xz * 6.0)), smoothstep(0.1, 0.35, mound) * steep * 0.92);
+    // beyond the range where trees are drawn, forest shows as a dark mottled tint on the ground
+    float forest = forestW(p.x, p.z);
+    farT = smoothstep(110.0, 220.0, t) * forest * (0.7 + 0.3 * vnoise(p.xz * 0.22)) * 0.92;
+    if (t < 70.0 && length(p.xz - uRPos.xz) < 52.0) {
+      float pty; float pzw = zoneMask(p.x, p.z, pty); float pwd = (pty > 2.5 && pty < 3.5) ? pzw : 0.0;
+      if (!(pty < 0.5 && pzw > 0.4)) trackDeform(p.xz, n, grooveOcc, pwd);
+      alb *= mix(vec3(1.0), vec3(0.80, 0.88, 1.0), clamp(grooveOcc * 1.3, 0.0, 1.0));   // the packed snow in a groove glows slightly blue
+    }
+  } else {
+    n = calcNormal(p, t);
+    if (id < 2.5) {
+      float snow = smoothstep(0.30, 0.68, n.y + 0.12 * vnoise(p.xz * 1.7 + p.y));
+      alb = mix(vec3(0.030, 0.095, 0.075) * (0.8 + 0.5 * vnoise(p.xz * 3.0)), vec3(0.92, 0.94, 1.0), snow * 0.93);
+    } else if (id < 3.5) alb = vec3(0.09, 0.055, 0.04);
+    else if (id < 4.5) alb = vec3(0.80, 0.17, 0.10);
+    else if (id < 5.5) alb = vec3(0.07, 0.09, 0.17);
+    else if (id < 6.5) alb = mix(vec3(0.10, 0.50, 0.52), vec3(0.95, 0.85, 0.68), smoothstep(0.55, 0.7, abs(dot(p - uRPos, uRZ))));
+    else if (id < 7.5) alb = vec3(0.95, 0.70, 0.16);
+    else if (id < 8.5) alb = vec3(0.96, 0.88, 0.78);
+    else if (id < 9.5) alb = vec3(0.12, 0.08, 0.07);
+    else if (id < 10.5) alb = vec3(0.85, 0.58, 0.45);
+    else if (id < 11.5) alb = vec3(0.30, 0.135, 0.075) * (0.8 + 0.4 * vnoise(vec2(p.y * 7.0, p.x + p.z)));   // logs
+    else if (id < 12.5) alb = vec3(0.93, 0.95, 1.0);                                                           // snow on the roof
+    else if (id < 13.5) alb = vec3(0.02);                                                                      // window (emissive, below)
+    else alb = vec3(0.34, 0.31, 0.32);                                                                         // chimney
+  }
+  float ndl = dot(n, SUN);
+  float sh = 1.0;
+  if (ndl > 0.0 && t < 150.0) sh = softShadow(p + n * (0.07 + 0.004 * t), SUN, gl_FragCoord.xy, t);
+  sh = mix(sh, 0.55, smoothstep(70.0, 150.0, t));   // far hills: no flickering shadow edges
+  gSh = true; float ao = clamp(mapD(p + n * 0.6) / 0.33, 0.0, 1.0); gSh = false;
+  ao = mix(0.38, 1.0, ao) * (1.0 - 0.35 * grooveOcc);
+  vec3 amb = mix(vec3(0.10, 0.12, 0.27), vec3(0.32, 0.28, 0.52), 0.5 + 0.5 * n.y) * ao;
+  float bounce = max(dot(n, -normalize(vec3(SUN.x, 0.0, SUN.z))), 0.0);
+  vec3 lit = SUNC * (5.2 * max(ndl, 0.0) * sh) + amb + vec3(0.30, 0.16, 0.26) * bounce * 0.5 * ao;
+  if (id < 1.5 && t < 120.0) lit += cabinGlow(p, n);
+  vec3 col = alb * lit;
+  if (id > 12.5 && id < 13.5) col = vec3(3.2, 1.7, 0.7) * (0.92 + 0.08 * sin(uTime * 9.0 + p.x * 3.0));   // the window glows
+  // the river bed is wind-polished and smoother: a stronger, tighter glint
+  if (id < 1.5) col += SUNC * pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0) * 0.5 * sh * chanW(p.x, p.z) * smoothstep(0.0, 0.2, ndl);
+  // snow sheen: grazing light on the fine crystals makes sunlit snow glow a little toward the sun
+  if (id < 1.5) col += SUNC * pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 4.0) * 0.45 * sh * smoothstep(0.0, 0.3, ndl);
+  if (iceG > 0.0) {   // glassy ice: sky reflection at grazing angles and a sharp sun glint
+    float fr = 0.06 + 0.8 * pow(1.0 - max(dot(n, -rd), 0.0), 4.0);
+    col += iceG * (fogColor(reflect(rd, n)) * fr * 0.8 + SUNC * pow(max(dot(reflect(rd, n), SUN), 0.0), 60.0) * 1.6 * sh);
+  }
+  if (id > 1.5 && id < 3.5) farT = smoothstep(105.0, 205.0, t);
+  if (id < 1.5 && t < 38.0 && sh > 0.5) {
+    float rnd = hash21(floor(p.xz * 22.0));
+    float spark = step(0.997, rnd) * pow(max(dot(reflect(rd, n), SUN), 0.0), 6.0) * exp(-t * 0.07);
+    col += SUNC * spark * 1.6;
+  }
+  if (id > 1.5) col += SUNC * pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * max(dot(rd, SUN), 0.0) * 0.5 * sh;
+  col = mix(col, vec3(0.15, 0.18, 0.27), farT);
+  float fogA = 1.0 - exp(-pow(t * 0.0036, 1.4));
+  col = mix(col, fogColor(rd), fogA);
+  col += SUNC * pow(max(dot(rd, SUN), 0.0), 5.0) * (1.0 - exp(-t * 0.004)) * 0.22;
+  return col;
+}
+
+// ---------- snow in the air ----------
+// Falling flakes are real points in a world-fixed grid that the ray walks through (DDA),
+// so they sit in depth, pass the camera with correct parallax and hide behind trees and hills.
+// ---------- valley mist ----------
+// How low the broad shape of the hill lies here (the periodic part of the terrain, without the downhill slope).
+float lowAt(float x, float z) { float zz = z + uRz;
+  return -(14.0 * sin(W * 2.25 * zz + 1.0) + 7.0 * sin(W * 4.75 * zz + 3.1)
+         + 6.0 * sin(W * 4.0 * x + 0.8) * sin(W * 2.875 * zz + 2.2) + 5.0 * sin(W * 7.0 * x + 2.0) * sin(W * 6.125 * zz + 0.5));
+}
+// Mist pools in the hollows and in the river bed, thick near the snow and thinning with height. A few samples
+// along the ray are enough, it is smooth.
+vec4 valleyMist(vec3 ro, vec3 rd, float tEnd, vec2 fc) {
+  float tm = min(tEnd, 260.0);
+  float jit = ign(fc);
+  float od = 0.0;
+  for (int i = 0; i < 7; i++) {
+    float tt = tm * (float(i) + jit) / 7.0;
+    vec3 p = ro + rd * tt;
+    float lo = lowAt(p.x, p.z);
+    float pool = max(smoothstep(5.0, 18.0, lo), 0.8 * chanW(p.x, p.z));
+    float hab = p.y - hgtLOD(p.x, p.z);          // height above the snow
+    float wisp = 0.65 + 0.7 * vnoise(p.xz * 0.025 + vec2(uTime * 0.03, 0.0));
+    float lay = 0.15 * exp(-max(hab, 0.0) / 10.0) + 0.85 * (1.0 - smoothstep(2.0, 12.0 + 0.5 * max(lo, 0.0), hab));   // a pool that fills the hollow
+    od += pool * lay * wisp * (tm / 7.0);
+  }
+  float a = 1.0 - exp(-od * 0.03);
+  vec3 c = mix(fogColor(rd) * 1.15, vec3(0.78, 0.70, 0.88), 0.35);
+  c += SUNC * pow(max(dot(rd, SUN), 0.0), 4.0) * 0.25;
+  return vec4(c, a * 0.9);
+}
+
+// Spindrift: the wind lifts loose snow off exposed lips and ridges and drags it downwind (+x) in thin streaks.
+vec4 spindrift(vec3 ro, vec3 rd, float tEnd, vec2 fc) {
+  float tm = min(tEnd, 50.0);
+  float jit = ign(fc + 11.0);
+  float od = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float tt = tm * (float(i) + jit) / 8.0;
+    vec3 p = ro + rd * tt;
+    float wm = max(1.0 - smoothstep(0.1, 0.45, abs(edgeG(p.x, p.z))), ridgeW(p.x, p.z));
+    if (wm > 0.03) {
+      float hab = p.y - hgtBase(p.x, p.z);
+      float streak = smoothstep(0.5, 0.9, vnoise(vec2(p.x * 0.07 - uTime * 2.6, p.z * 0.22)));
+      od += wm * streak * exp(-max(hab, 0.0) / 1.6) * (tm / 8.0) * (1.0 - smoothstep(18.0, 50.0, tt));
+    }
+  }
+  float a = 1.0 - exp(-od * 0.05);
+  return vec4(mix(vec3(0.95, 0.92, 1.0), SUNC * 1.5, 0.25 + 0.5 * pow(max(dot(rd, SUN), 0.0), 3.0)), a * 0.45);
+}
+
+float flakes3(vec3 ro, vec3 rd, float tmax) {
+  const float C = 4.0;
+  float tend = min(tmax, 36.0);
+  vec3 cell = floor(ro / C);
+  vec3 stp = vec3(rd.x >= 0.0 ? 1.0 : -1.0, rd.y >= 0.0 ? 1.0 : -1.0, rd.z >= 0.0 ? 1.0 : -1.0);
+  vec3 inv = 1.0 / (abs(rd) + 1e-5) * stp;
+  vec3 tnext = ((cell + max(stp, 0.0)) * C - ro) * inv;
+  vec3 tdel = abs(inv) * C;
+  float a = 0.0, tcur = 0.0;
+  for (int i = 0; i < 18; i++) {
+    uvec3 ci = uvec3(mod(cell, 64.0));
+    uint h = ihash((ci.x * 73856093u) ^ (ci.y * 83492791u) ^ (ci.z * 19349663u));
+    for (int k = 0; k < 3; k++) {
+      uint hk = ihash(h + uint(k) * 2654435761u);
+      vec3 r = vec3(u2f(hk), u2f(ihash(hk + 1u)), u2f(ihash(hk + 2u)));
+      vec3 c = (cell + fract(r + vec3(0.07, -0.19, 0.04) * uTime * (0.7 + 0.6 * r.x) / C * 4.0)) * C;
+      vec3 oc = c - ro;
+      float tc = dot(oc, rd);
+      if (tc > 0.15 && tc < tend) {
+        float rad = 0.012 + 0.03 * u2f(ihash(hk + 3u));
+        float d2 = dot(oc, oc) - tc * tc;
+        a += smoothstep(rad * rad, rad * rad * 0.25, d2) * exp(-tc * 0.045);
+      }
+    }
+    tcur = min(tnext.x, min(tnext.y, tnext.z));
+    if (tcur > tend) break;
+    if (tnext.x <= tnext.y && tnext.x <= tnext.z) { cell.x += stp.x; tnext.x += tdel.x; }
+    else if (tnext.y <= tnext.z) { cell.y += stp.y; tnext.y += tdel.y; }
+    else { cell.z += stp.z; tnext.z += tdel.z; }
+  }
+  return clamp(a, 0.0, 1.0);
+}
+
+// Snow dust thrown up by the board: soft spheres, hidden by geometry in front of them.
+vec4 sprayLayer(vec3 ro, vec3 rd, float tmax) {
+  vec3 oc0 = uRPos - ro;
+  float tc0 = dot(oc0, rd);
+  if (length(oc0 - rd * tc0) > 16.0) return vec4(0.0);
+  float trans = 1.0;
+  for (int i = 0; i < 72; i++) {
+    vec4 s = uSpray[i];
+    float qa = floor(s.w * 0.125);
+    if (qa < 1.0) continue;
+    float al = qa / 63.0;
+    s.w -= qa * 8.0;
+    vec3 oc = s.xyz - ro;
+    float tc = dot(oc, rd);
+    if (tc < 0.3 || tc > tmax) continue;
+    float k = 1.0 - (dot(oc, oc) - tc * tc) / (s.w * s.w);
+    if (k <= 0.0) continue;
+    trans *= 1.0 - al * k * k * (3.0 - 2.0 * k);
+  }
+  float lightK = 0.35 + 0.55 * pow(max(dot(rd, SUN), 0.0), 1.5);
+  vec3 pc = mix(vec3(0.95, 1.0, 1.35), vec3(1.7, 1.35, 1.05), lightK);   // brighter than sunlit snow, so the powder reads against it
+  return vec4(pc, 1.0 - trans);
+}
+
+void main() {
+  vec2 uv = (2.0 * (gl_FragCoord.xy + uJit) - uRes) / uRes.y;
+  vec3 rd = normalize(uv.x * uCamR + uv.y * uCamU + uFocal * uCamF);
+  vec3 ro = uCamPos;
+  float t = 0.05, id = 0.0, lastD = 1e3, lastId = 1.0;
+  bool hit = false;
+  // Silhouette expansion: remember the closest real near-miss of the ray (a local minimum of the distance that the
+  // ray then leaves again). Where it is under about a pixel wide, that surface partly covers the pixel, so its
+  // colour is blended in by coverage. This smooths tree, rider and crest outlines without extra rays.
+  float pixA = 2.0 / (uRes.y * uFocal);
+  float bestD = 1e5, tB = 0.0, idB = 1.0;
+  float pd = 1e5, ppd = 1e5, pt = 0.0, pid = 1.0;
+  for (int i = 0; i < 170; i++) {
+    vec2 m = mapM(ro + rd * t);
+    lastD = m.x; lastId = m.y;
+    float dr = gReal ? m.x : 1e5;
+    if (pd <= ppd && dr > 1.25 * pd + 0.002 && pd < bestD) { bestD = pd; tB = pt; idB = pid; }
+    ppd = pd; pd = dr; pt = t; pid = m.y;
+    // far away the tolerance grows, there is nothing to see through the haze anyway
+    if (m.x < epsAt(t)) { hit = true; id = m.y; break; }
+    t += max(m.x, 0.01 + 0.0007 * t);
+    if (t > TMAX) break;
+  }
+  // Rays that graze a sharp lip run out of steps right at it. Give them a second pass with a coarser
+  // step floor instead of calling them sky (that drew a dashed line of sky pixels along every drop).
+  if (!hit && t <= TMAX) {
+    for (int i = 0; i < 90; i++) {
+      vec2 m = mapM(ro + rd * t);
+      lastD = m.x; lastId = m.y;
+      if (m.x < epsAt(t)) { hit = true; id = m.y; break; }
+      t += max(m.x, 0.06 + 0.004 * t);
+      if (t > TMAX) break;
+    }
+  }
+  // a ray that ran out of steps while skimming the ground is ground, not sky
+  if (!hit && t <= TMAX) {
+    // Only call it ground if the ray really is skimming the snow. Near trees the step budget can also
+    // run out in mid air, and that must stay sky, otherwise it shows up as white pillars above the forest.
+    vec3 pe = ro + rd * t;
+    if (pe.y - hgtT(pe.x, pe.z, t) < 0.04 * t + 0.4) { hit = true; id = 1.0; }
+  }
+  vec3 col = hit ? shade(ro, rd, t, id) : farScene(rd);
+  float kern = 0.7 * pixA * tB + 0.002;
+  if (bestD < kern && tB > 0.3 && (!hit || tB < t - 0.02)) {
+    float cov = 1.0 - smoothstep(0.0, kern, bestD);
+    col = mix(col, shade(ro, rd, tB, idB), cov);
+  }
+  float tEnd = hit ? t : TMAX;
+  vec4 vm = valleyMist(ro, rd, tEnd, gl_FragCoord.xy);
+  col = mix(col, vm.rgb, vm.a);
+  vec4 sdv = spindrift(ro, rd, tEnd, gl_FragCoord.xy);
+  col = mix(col, sdv.rgb, sdv.a);
+  vec4 sp = sprayLayer(ro, rd, tEnd);
+  col = mix(col, sp.rgb, sp.a * 0.85);
+  float fa = flakes3(ro, rd, tEnd);
+  float dust = pow(max(dot(rd, SUN), 0.0), 5.0);   // flakes sparkle when you look toward the sun
+  col = mix(col, mix(vec3(0.95, 0.95, 1.0), SUNC * (1.4 + 2.5 * dust), 0.3 + 0.5 * dust), clamp(fa * (0.85 + 0.6 * dust), 0.0, 1.0));
+  col *= 0.72;
+  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
+  vec2 vq = gl_FragCoord.xy / uRes;
+  col *= 0.72 + 0.28 * pow(16.0 * vq.x * vq.y * (1.0 - vq.x) * (1.0 - vq.y), 0.25);
+  col += (hash21(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
+  // alpha carries the hit distance for the temporal pass (negative on the rider, which moves on its own)
+  float enc = hit ? t / TMAX : 1.0;
+  if (hit && id > 3.5 && id < 10.5 && length(ro + rd * t - uRPos) < 2.7) enc = -enc - 1e-5;
+  gl_FragColor = vec4(col, uTaa > 0.5 ? enc : 1.0);
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+window.__prog=function(p){var e=document.getElementById("splashBar");if(e)e.style.width=Math.round(p*100)+"%";};
+setTimeout(function(){window.__prog(0.15);requestAnimationFrame(function(){requestAnimationFrame(function(){
+(function () {
+'use strict';
+var P = 2048, W = 2 * Math.PI / P, G = 9.0, SLOPE = 0.36, VMIN = 5.5;
+var CELL = 10.24, NC = 200;
+function sm(a, b, x) { var t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+var sin = Math.sin;
+
+// ---- terrain, identical to the shader (periodic in x and z) ----
+function edgeG(x, z) { return 0.6 * sin(W * 6.875 * z + W * 2 * x + 0.4) + 0.4 * sin(W * 5 * x - W * 4.125 * z + 2.0); }
+function wrapP(d, P) { return d - P * Math.floor(d / P + 0.5); }
+function chanC(z) { return 35 * sin(W * 4.125 * z + 0.4) + 10 * sin(W * 11.125 * z + 2.0) + 300; }
+function chanW(x, z) { var d = wrapP(x - chanC(z), 1024); return Math.exp(-(d * d) / 81); }
+function ridgeC(z) { return 50 * sin(W * 2.875 * z + 2.0) + 12 * sin(W * 9.75 * z + 0.7) + 120; }
+function ridgeW(x, z) { var d = wrapP(x - ridgeC(z), 512); return Math.exp(-(d * d) / 36); }
+function forestW0(x, z) { return sm(0.57, 0.75, forestAt(x, z)) * (1 - sm(0.2, 0.6, chanW(x, z))); }
+function forestW(x, z) { return sm(0.57, 0.75, forestAt(x, z)) * (1 - sm(0.2, 0.6, chanW(x, z))) * (1 - sm(0.1, 0.5, zoneClear(x, z))); }
+function roughAt(g, x, z) { return Math.max(1 - sm(0.15, 0.55, Math.abs(g)), forestW0(x, z)); }
+function rollH(x, z) {
+  var u = 22.25 * z / 2048 + 5 * x / 2048 + 0.35 * sin(W * 2.875 * z + W * 2 * x + 1.0);
+  var ph = u - Math.floor(u);
+  var sawt = ph < 0.88 ? sm(0, 0.88, ph) : 1 - sm(0.88, 1.0, ph);
+  var patch = sm(0, 0.5, sin(W * 4 * x + 1.3) * sin(W * 4.75 * z + 0.2) + 0.1);
+  return 3 * sawt * patch;
+}
+// ---- landforms (mirror of the shader): frozen tarn, gorge, stone stairs, powder bowl, scoured ground ----
+var zsq = /[?&]zs=(\d+)/.exec(location.search), ZSEED = zsq ? (+zsq[1]) >>> 0 : (Math.random() * 4294967296) >>> 0;   // every run gets its own landforms
+var _z = { ty: -1, dx: 0, dz: 0, R: 100, sd: 0 };
+function zoneCell(cx, cz) {
+  var h = ihash((Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663) ^ ZSEED) >>> 0);
+  _z.ty = -1;
+  var bz = bioAt(cx * 512 + 256, cz * 512 + 256);
+  if ((h & 255) >= 150 + 55 * bz) return false;
+  var h2 = ihash(h);
+  var oxi = Math.floor((0.3 + 0.4 * ((h >>> 8) & 255) / 256) * 512 + 0.5), ozi = Math.floor((0.3 + 0.4 * ((h >>> 16) & 255) / 256) * 512 + 0.5);
+  _z.R = Math.floor(85 + 55 * (h >>> 24) / 256 + 0.5);
+  _z.ty = (h2 >>> 8) & 7;
+  // rocky country favours gorges, stairs, scoured ground and mesas; soft country favours tarns, powder and dunes
+  if (bz > 0.3 && (_z.ty === 0 || _z.ty === 3 || _z.ty === 6) && ((h2 >>> 12) & 1)) _z.ty = [1, 2, 4, 5][(h2 >>> 13) & 3];
+  else if (bz < -0.3 && (_z.ty === 1 || _z.ty === 2 || _z.ty === 4) && ((h2 >>> 12) & 1)) _z.ty = [0, 3, 6, 3][(h2 >>> 13) & 3];
+  _z.sd = Math.round(Math.min(0.99, (oxi - 153) / 205) * 255) / 255;
+  _z.px = cx * 512 + oxi; _z.pz = cz * 512 + ozi;
+  return true;
+}
+function zoneParams(x, z) {
+  if (!zoneCell(Math.floor(x / 512), Math.floor(z / 512))) return false;
+  _z.dx = x - _z.px; _z.dz = z - _z.pz;
+  if (_z.ty > 0.5 && _z.ty < 1.5) return Math.abs(_z.dx) < 80 && Math.abs(_z.dz) < _z.R;
+  return _z.dx * _z.dx + _z.dz * _z.dz < (_z.R + 7) * (_z.R + 7);
+}
+// the nearest few landforms go to the shader (local coordinates)
+var zList = [], ZU = ['uZn0', 'uZn1'];
+function updateZones(camX, camZ) {
+  zList.length = 0;
+  if (/[?&]nz=1/.test(location.search)) return;
+  var c0x = Math.floor(camX / 512), c0z = Math.floor(camZ / 512);
+  for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+    if (!zoneCell(c0x + i, c0z + j)) continue;
+    var dd = Math.hypot(camX - _z.px, camZ - _z.pz);
+    if (dd < _z.R + 230) { var gb = Math.hypot(80, _z.R) + 8; zList.push({ d: dd, x: _z.px, z: _z.pz, b2: gb * gb, hc: hgtCore(_z.px, _z.pz) + SLOPE * _z.pz, w: _z.ty + 8 * (_z.R - 80) + 512 * Math.round(_z.sd * 255) }); }
+  }
+  zList.sort(function (a, b) { return a.d - b.d; });
+}
+function zLen(dx, dz, sd) { return Math.hypot(dx, dz) + 6 * sin(dx * 0.07 + sd * 10) * sin(dz * 0.06 + sd * 7); }
+function gorgeX(dz, sd) { return 16 * sin(dz * 0.04 + sd * 6); }
+function gorgeD(dx, dz, sd) { return Math.abs(dx - gorgeX(dz, sd)) + 2.5 * sin(dz * 0.23 + sd * 20) + 1.5 * sin(dz * 0.51 + dx * 0.2); }
+function zoneMaskAny(x, z) {
+  if (!zoneParams(x, z)) return 0;
+  var ty = _z.ty, dx = _z.dx, dz = _z.dz, R = _z.R, sd = _z.sd;
+  if (ty > 0.5 && ty < 1.5) return (1 - sm(0.6, 1.0, Math.abs(dz) / R)) * (1 - sm(26, 56, Math.abs(dx - gorgeX(dz, sd))));
+  return 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+}
+function zoneClear(x, z) { var w = zoneMaskAny(x, z); return (_z.ty > 2.5 && _z.ty < 3.5) ? 0 : w; }
+function iceAt(x, z) { var w = zoneMaskAny(x, z); return _z.ty === 0 ? w : 0; }
+function powderAt(x, z) { var w = zoneMaskAny(x, z); return (_z.ty > 2.5 && _z.ty < 3.5) ? w : 0; }
+function rockLump(x, z) {
+  var l = sin(W * 45 * x + 0.5) * sin(W * 39 * z + 1.0) + 0.4 * sin(W * 91 * x + W * 77 * z);
+  return 2.2 * sm(0.25, 0.95, l) + 0.7 * sm(0.3, 0.9, sin(W * 131 * x + 1.7) * sin(W * 127 * z + 0.3));
+}
+var _calm = 0;
+function hgtCore(x, z) {
+  var h = -SLOPE * z;
+  var hs = 9 * sin(W * 2.25 * z + 1.0) + 4.5 * sin(W * 4.75 * z + 3.1)
+         + 2.8 * sin(W * 9.25 * z + 0.3 + W * 15 * x)
+         + 6.0 * sin(W * 4 * x + 0.8) * sin(W * 2.875 * z + 2.2)
+         + 5.0 * sin(W * 7 * x + 2.0) * sin(W * 6.125 * z + 0.5);
+  h += hs * (1 + 0.5 * sin(W * 0.5 * z + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
+  h += 85 * sin(W * 0.25 * z + 1.3) + 40 * sin(W * 0.375 * z + 4.0);
+  h -= 6.0 * sm(-0.25, 0.25, edgeG(x, z));
+  return h + rollH(x, z) - 2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
+}
+function zoneApply(x, z, h) {
+  _calm = 0;
+  if (!zoneParams(x, z)) return h;
+  var ty = _z.ty, dx = _z.dx, dz = _z.dz, R = _z.R, sd = _z.sd, w;
+  if (ty < 0.5) {
+    w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+    if (w > 0) { h += (hgtCore(x - dx, z - dz) - 0.16 * dz - h) * w; _calm = w; }
+  } else if (ty < 1.5) {
+    var env = 1 - sm(0.55, 0.95, Math.abs(dz) / R);
+    h -= 9 * env * (1 - sm(7, 19, gorgeD(dx, dz, sd)));
+  } else if (ty < 2.5) {
+    w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+    var u = dz / 18 + 0.2 * sin(dx * 0.03 + sd * 9), ph = u - Math.floor(u);
+    var saw = ph < 0.84 ? (ph / 0.84) * 0.6 + sm(0, 0.84, ph) * 0.4 : 1 - sm(0.84, 1.0, ph);
+    h += 3.2 * saw * w;
+  } else if (ty < 3.5) {
+    w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+    h += w * (-2.0 * w + 0.9 * sin(dx * 0.045 + sd * 8) * sin(dz * 0.05 + sd * 5));
+    _calm = w;
+  } else if (ty < 4.5) {
+    w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+    if (w > 0) h += w * rockLump(x, z);
+  } else if (ty < 5.5) {
+    var l5 = zLen(dx, dz, sd) / R;
+    w = 1 - sm(0.45, 0.7, l5);
+    if (w > 0) h += (hgtCore(x - dx, z - dz) + SLOPE * (z - dz) + 9 - 0.36 * z + 0.36 * dz - 0.16 * dz - h) * w;
+  } else if (ty < 6.5) {
+    w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
+    h += w * (1.5 * sin(dz * 0.22 + 0.35 * sin(dx * 0.05 + sd * 9) + sd * 20) + 0.5 * sin(dz * 0.5 + dx * 0.1));
+  } else {
+    var l7 = zLen(dx, dz, sd) / R, rim = Math.exp(-Math.pow((l7 - 0.8) / 0.1, 2));
+    w = 1 - sm(0.85, 1.0, l7);
+    h += w * (-8 * (1 - sm(0.3, 0.75, l7)) + 2 * rim);
+  }
+  return h;
+}
+function hgt0(x, z) {
+  var g = edgeG(x, z), rg = roughAt(g, x, z);
+  var h = zoneApply(x, z, hgtCore(x, z)), cm = _calm;
+  rg = Math.max(1 - sm(0.15, 0.55, Math.abs(g)), forestW0(x, z) * (1 - sm(0.1, 0.5, zoneClear(x, z))));
+  var fine = 1.5 * sin(W * 19 * z + 1.7 - W * 20 * x) + 0.55 * sin(W * 41 * z + 0.9 + W * 33 * x)
+           + 1.1 * sin(W * 29 * x + W * 13 * z + 2.0) + 2.2 * sin(W * 21 * x + 1.1) * sin(W * 17 * z + 0.4);
+  var env = sm(0.55, 0.95, sin(W * 11 * z + 2.5 + W * 3 * x));
+  fine += env * 1.8 * sin(W * 68 * z + W * 2 * x);
+  return h + fine * (0.3 + 0.7 * rg) * (1 - cm);
+}
+// ---- snow mounds, same layout as the shader ----
+function bumpOf(dx, dz, rx, ry) { var a = Math.max(1 - (dx * dx + dz * dz) / (rx * rx), 0); return ry * a * a; }
+function rockBump(x, z) {
+  var CR = 12.8, cx = Math.floor(x / CR), cz = Math.floor(z / CR), b = 0;
+  for (var i = cx - 1; i <= cx + 1; i++) for (var j = cz - 1; j <= cz + 1; j++) {
+    var ix = ((i % 160) + 160) % 160, iz = ((j % 160) + 160) % 160;
+    var h = ihash((Math.imul(ix, 668265263) ^ Math.imul(iz, 374761393) ^ 0x2545f491) >>> 0);
+    var q = function (k) { return u2f(ihash((h + k) >>> 0)); };
+    var r3 = q(3);
+    if (r3 < 0.8) {
+      var px = (i + 0.5 + (q(1) - 0.5) * 0.3) * CR, pz = (j + 0.5 + (q(2) - 0.5) * 0.3) * CR;
+      var dx = x - px, dz = z - pz;
+      if (dx * dx + dz * dz < 16 && r3 < 0.24 * sm(0.3, 0.8, roughAt(edgeG(px, pz), px, pz)) && zoneMaskAny(px, pz) < 0.25) {
+        var rx = 0.9 + 2.5 * Math.pow(q(4), 1.8);
+        b += bumpOf(dx, dz, rx, rx * (0.2 + 0.16 * q(5)));
+        if (q(6) < 0.7) {
+          var r2 = 0.5 + 0.6 * q(9);
+          b += bumpOf(dx - (q(7) - 0.5) * 3, dz - (q(8) - 0.5) * 3, r2, r2 * 0.3);
+        }
+      }
+    }
+  }
+  return b;
+}
+function hgt(x, z) { return hgt0(x, z) + rockBump(x, z); }
+function grad(x, z) { var e = 0.12; return [(hgt(x + e, z) - hgt(x - e, z)) / (2 * e), (hgt(x, z + e) - hgt(x, z - e)) / (2 * e)]; }
+function bioAt(x, z) { return 0.6 * sin(W * 0.28125 * z + 1.1 + W * x) + 0.4 * sin(W * 0.15625 * z + 2.3 - W * x); }
+function forestAt(x, z) {
+  var a = sin(W * 6 * x + 0.7) * sin(W * 4.75 * z + 2.1);
+  var b = sin(W * 13 * x + W * 11.125 * z + 0.3);
+  return 0.5 + 0.5 * (0.7 * a + 0.3 * b) + 0.3 * bioAt(x, z);
+}
+
+// ---- trees: same integer hash as the shader, so what you see is what you hit ----
+function ihash(x) {
+  x ^= x >>> 16; x = Math.imul(x, 0x7feb352d); x ^= x >>> 15; x = Math.imul(x, 0x846ca68b); x ^= x >>> 16;
+  return x >>> 0;
+}
+function u2f(h) { return (h >>> 8) / 16777216; }
+function treeAtCell(cx, cz) {
+  var ix = ((cx % NC) + NC) % NC, iz = ((cz % NC) + NC) % NC;
+  var h = ihash((Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) >>> 0);
+  var r1 = u2f(ihash((h + 1) >>> 0)), r2 = u2f(ihash((h + 2) >>> 0)), r3 = u2f(ihash((h + 3) >>> 0)), r4 = u2f(ihash((h + 4) >>> 0));
+  var tx = (cx + 0.5 + (r1 - 0.5) * 0.3) * CELL, tz = (cz + 0.5 + (r2 - 0.5) * 0.3) * CELL;
+  if (r3 < forestW(tx, tz) * 0.85) return { x: tx, z: tz, s: 0.4 + 0.85 * Math.pow(r4, 1.5) };
+  return null;
+}
+function treesNear(x, z, range) {
+  var out = [], c0x = Math.floor((x - range) / CELL), c1x = Math.floor((x + range) / CELL);
+  var c0z = Math.floor((z - range) / CELL), c1z = Math.floor((z + range) / CELL);
+  for (var i = c0x; i <= c1x; i++) for (var j = c0z; j <= c1z; j++) { var t = treeAtCell(i, j); if (t) out.push(t); }
+  return out;
+}
+var _pc = { x: 0, z: 0, nx: 0, nz: 0, hit: false };
+// ---- cabins: mirror of cabinCell / cabinSiteOk in the shader ----
+function cabinAtCell(cx, cz) {
+  var ix = ((cx % 8) + 8) % 8, iz = ((cz % 8) + 8) % 8;
+  var h = ihash(((Math.imul(ix, 2246822519) ^ Math.imul(iz, 3266489917)) ^ 0x9e3779b1) >>> 0);
+  if (!(u2f(ihash((h + 1) >>> 0)) < 0.6)) return null;
+  var x = (cx + 0.2 + 0.6 * u2f(ihash((h + 2) >>> 0))) * 256, z = (cz + 0.2 + 0.6 * u2f(ihash((h + 3) >>> 0))) * 256;
+  if (!(zoneMaskAny(x, z) < 0.02 && forestAt(x, z) < 0.45 && chanW(x, z) < 0.1 && Math.abs(edgeG(x, z)) > 0.5)) return null;
+  return { x: x, z: z, yaw: u2f(ihash((h + 4) >>> 0)) * 6.2831853 };
+}
+function pushFromCabin(x, z, r) {
+  var cx = Math.floor(x / 256), cz = Math.floor(z / 256);
+  var c = cabinAtCell(cx, cz);
+  if (!c || Math.hypot(x - c.x, z - c.z) > 8) return;
+  var cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), dx = x - c.x, dz = z - c.z;
+  var lx = dx * cy - dz * sy, lz = dx * sy + dz * cy;
+  var hx = 2.5 + r, hz = 1.8 + r;
+  if (Math.abs(lx) < hx && Math.abs(lz) < hz) {
+    var px = hx - Math.abs(lx), pz = hz - Math.abs(lz), nlx = 0, nlz = 0;
+    if (px < pz) { nlx = lx < 0 ? -1 : 1; lx = nlx * hx; } else { nlz = lz < 0 ? -1 : 1; lz = nlz * hz; }
+    _pc.x = c.x + lx * cy + lz * sy; _pc.z = c.z - lx * sy + lz * cy;
+    _pc.nx = nlx * cy + nlz * sy; _pc.nz = -nlx * sy + nlz * cy; _pc.hit = true;
+  }
+}
+function pushFromTrees(x, z, r) {
+  var cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+  _pc.x = x; _pc.z = z; _pc.hit = false;
+  for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+    var t = treeAtCell(cx + i, cz + j);
+    if (!t) continue;
+    var dx = _pc.x - t.x, dz = _pc.z - t.z, d = Math.hypot(dx, dz), m = r + 0.32 * t.s + 0.1;
+    if (d < m) {
+      if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+      _pc.nx = dx / d; _pc.nz = dz / d;
+      _pc.x = t.x + _pc.nx * m; _pc.z = t.z + _pc.nz * m; _pc.hit = true;
+    }
+  }
+  pushFromCabin(_pc.x, _pc.z, r);
+  return _pc;
+}
+
+// ---- small vector helpers ----
+function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function mul(a, k) { return [a[0] * k, a[1] * k, a[2] * k]; }
+function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+function norm(a) { var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+function lerp3(a, b, k) { return add(mul(a, 1 - k), mul(b, k)); }
+function wrapA(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+function damp(rate, dt) { return 1 - Math.exp(-rate * dt); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// ---- renderer ----
+var canvas = document.getElementById('gl');
+var renderer;
+try {
+  var ctx = canvas.getContext('webgl2', { antialias: false, powerPreference: 'high-performance', alpha: false });
+  renderer = ctx ? new THREE.WebGLRenderer({ canvas: canvas, context: ctx }) : null;
+} catch (e) { renderer = null; }
+if (!renderer || !renderer.capabilities.isWebGL2) { document.getElementById('fail').hidden = false; document.getElementById('menu').hidden = true; return; }
+
+var U = {
+  uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uJit: { value: new THREE.Vector2() }, uTaa: { value: 0 },
+  uCamPos: { value: new THREE.Vector3() }, uCamR: { value: new THREE.Vector3() }, uCamU: { value: new THREE.Vector3() }, uCamF: { value: new THREE.Vector3() },
+  uFocal: { value: 1.5 },
+  uRPos: { value: new THREE.Vector3() }, uRX: { value: new THREE.Vector3() }, uRY: { value: new THREE.Vector3() }, uRZ: { value: new THREE.Vector3() },
+  uCrouch: { value: 0 }, uSteer: { value: 0 }, uAir: { value: 0 }, uSpeed: { value: 0 },
+  uRz: { value: 0 }, uRzB: { value: 0 }, uTrail: { value: [] }, uZn0: { value: new THREE.Vector4(0, 0, 0, 0) }, uZn1: { value: new THREE.Vector4(0, 0, 0, 0) }, uZH: { value: new THREE.Vector2() },  uSpray: { value: [] }
+};
+var MAXS = 72, i0;
+for (i0 = 0; i0 < 48; i0++) U.uTrail.value.push(new THREE.Vector4());
+for (i0 = 0; i0 < MAXS; i0++) { U.uSpray.value.push(new THREE.Vector4()); }
+var mat = new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: document.getElementById('fs').textContent,
+  depthTest: false, depthWrite: false
+});
+var scene = new THREE.Scene();
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+var cam = new THREE.Camera();
+
+// ---- temporal anti-aliasing ----
+// The scene pass samples each pixel at a slightly different sub-pixel position every frame (Halton jitter). The
+// resolve pass reprojects last frame's result onto this one with the stored hit distance, clamps it to the colours
+// around the pixel (so moving things do not smear), and blends. Edges, shadow edges and specular glints then
+// converge to a smooth, supersampled look. The rider is reprojected with its own motion.
+var taaQ = new URLSearchParams(location.search).get('taa');
+var taa = taaQ !== '0' && !!(renderer.extensions.get('EXT_color_buffer_float') || renderer.extensions.get('EXT_color_buffer_half_float'));
+var VS = 'void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }';
+var FS_RES = [
+  'precision highp float;',
+  'uniform sampler2D tCur; uniform sampler2D tHist; uniform vec2 uRes;',
+  'uniform vec3 cPos, cR, cU, cF; uniform float cFocal; uniform vec3 pPos, pR, pU, pF; uniform float pFocal;',
+  'uniform vec3 cRP, cRX, cRY, cRZ, pRP, pRX, pRY, pRZ; uniform float uReset;',
+  'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
+  'void main() {',
+  '  vec2 fc = gl_FragCoord.xy; vec2 px = 1.0 / uRes; vec2 uv0 = fc * px;',
+  '  vec4 c0 = texture2D(tCur, uv0);',
+  '  vec3 m1 = c0.rgb, m2 = c0.rgb * c0.rgb, mn = c0.rgb, mx = c0.rgb;',
+  '  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {',
+  '    if (i == 0 && j == 0) continue;',
+  '    vec3 s = texture2D(tCur, uv0 + vec2(float(i), float(j)) * px).rgb;',
+  '    m1 += s; m2 += s * s; mn = min(mn, s); mx = max(mx, s);',
+  '  }',
+  '  m1 /= 9.0; vec3 sd = sqrt(max(m2 / 9.0 - m1 * m1, 0.0));',
+  '  vec3 lo = max(mn, m1 - 1.5 * sd), hi = min(mx, m1 + 1.5 * sd);',
+  '  bool rid = c0.a < 0.0; float t = abs(c0.a) * 360.0;',
+  '  vec2 uv = (2.0 * fc - uRes) / uRes.y;',
+  '  vec3 rd = normalize(uv.x * cR + uv.y * cU + cFocal * cF);',
+  '  vec3 P = cPos + rd * t;',
+  '  if (rid) { vec3 dl = P - cRP; P = pRP + pRX * dot(dl, cRX) + pRY * dot(dl, cRY) + pRZ * dot(dl, cRZ); }',
+  '  vec3 d = P - pPos; float z = dot(d, pF);',
+  '  vec2 puv = vec2(dot(d, pR), dot(d, pU)) * pFocal / max(z, 1e-3);',
+  '  vec2 pfc = (puv * uRes.y + uRes) * 0.5; vec2 huv = pfc * px;',
+  '  bool valid = z > 0.01 && huv.x > 0.003 && huv.y > 0.003 && huv.x < 0.997 && huv.y < 0.997;',
+  '  vec3 hist = texture2D(tHist, huv).rgb;',
+  '  vec3 hc = clamp(hist, lo, hi);',
+  '  float lc = luma(c0.rgb), lh = luma(hc);',
+  '  float diff = abs(lc - lh) / max(max(lc, lh), 0.15);',
+  '  float a = 0.12 + 0.5 * diff + min(0.3, length(hist - hc) * 2.0) + min(0.25, length(pfc - fc) * 0.04);',
+  '  a = clamp(a, 0.1, 0.85);',
+  '  if (!valid || uReset > 0.5) a = 1.0;',
+  '  gl_FragColor = vec4(mix(hc, c0.rgb, a), c0.a);',
+  '}'
+].join('\n');
+var BG_SRC = (function () { var s = document.getElementById('fs').textContent; return s.substring(s.indexOf('// BG-BEGIN'), s.indexOf('// BG-END')); })();
+var FS_BLIT = [
+  'precision highp float;',
+  'uniform sampler2D tex; uniform vec2 uRes; uniform vec2 uLow;',
+  'uniform vec3 uCamR, uCamU, uCamF; uniform float uFocal;',
+  'const vec3 SUN = normalize(vec3(0.55, 0.12, 0.83)); const vec3 SUNC = vec3(1.0, 0.53, 0.23);',
+  BG_SRC,
+  // the same tone curve as the scene pass, so the background detail added here matches what is underneath
+  'vec3 tmap(vec3 c) { c *= 0.72; c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14); return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)); }',
+  'vec3 bgAt(vec2 fcLow, vec2 res) { vec2 q = (2.0 * fcLow - res) / res.y; vec3 rd = normalize(q.x * uCamR + q.y * uCamU + uFocal * uCamF); return tmap(farLayers(rd, skyLite(rd))); }',
+  // The scene is traced at a lower resolution and shown at the screen's own. A Catmull-Rom filter (five bilinear taps)
+  // keeps edges crisp where the browser's plain bilinear stretch would blur them.
+  'vec3 bicubic(vec2 uv) {',
+  '  vec2 tp = uv * uLow; vec2 c = floor(tp - 0.5) + 0.5; vec2 f = tp - c;',
+  '  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)); vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);',
+  '  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f)); vec2 w3 = f * f * (-0.5 + 0.5 * f);',
+  '  vec2 w12 = w1 + w2; vec2 o12 = w2 / w12;',
+  '  vec2 t0 = (c - 1.0) / uLow; vec2 t12 = (c + o12) / uLow; vec2 t3 = (c + 2.0) / uLow;',
+  '  vec3 r = texture2D(tex, vec2(t12.x, t0.y)).rgb * (w12.x * w0.y) + texture2D(tex, vec2(t0.x, t12.y)).rgb * (w0.x * w12.y)',
+  '         + texture2D(tex, t12).rgb * (w12.x * w12.y) + texture2D(tex, vec2(t3.x, t12.y)).rgb * (w3.x * w12.y) + texture2D(tex, vec2(t12.x, t3.y)).rgb * (w12.x * w3.y);',
+  '  float ws = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;',
+  '  return max(r / ws, 0.0);',
+  '}',
+  'float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
+  'void main() {',
+  '  vec2 px = 1.0 / uLow; vec2 uv = gl_FragCoord.xy / uRes;',
+  '  vec3 c = bicubic(uv);',
+  // Sky and mountains depend only on the view direction, so at full screen resolution they can be recomputed cheaply.
+  // Where the scene pass saw only sky (alpha 1, also in the surrounding pixels) the difference between the sharp version and
+  // a smooth blend of the low resolution samples is added back: crisp mountain ridges, sun disc and horizon haze.
+  '  float sa = texture2D(tex, uv).a;',
+  '  if (sa > 0.9995) {',
+  '    vec2 tp = uv * uLow; vec2 c0 = floor(tp - 0.5) + 0.5; vec2 fr = tp - c0;',
+  '    vec3 f00 = bgAt(c0, uLow), f10 = bgAt(c0 + vec2(1.0, 0.0), uLow), f01 = bgAt(c0 + vec2(0.0, 1.0), uLow), f11 = bgAt(c0 + vec2(1.0, 1.0), uLow);',
+  '    vec3 ref = mix(mix(f00, f10, fr.x), mix(f01, f11, fr.x), fr.y);',
+  '    c += bgAt(tp, uLow) - ref;',
+  '  }',
+  '  vec3 b = 0.25 * (texture2D(tex, uv + vec2(px.x, 0.0)).rgb + texture2D(tex, uv - vec2(px.x, 0.0)).rgb + texture2D(tex, uv + vec2(0.0, px.y)).rgb + texture2D(tex, uv - vec2(0.0, px.y)).rgb);',
+  '  c = clamp(c + (c - b) * 0.16, 0.0, 1.0);',
+  '  vec3 bl = vec3(0.0);',
+  '  for (int i = 0; i < 8; i++) {',
+  '    float a = float(i) * 0.7853982;',
+  '    vec2 o = vec2(cos(a), sin(a));',
+  '    bl += max(texture2D(tex, uv + o * px * 3.5).rgb - 0.80, 0.0) + 0.6 * max(texture2D(tex, uv + o * px * 9.0).rgb - 0.80, 0.0);',
+  '  }',
+  '  c += bl * vec3(1.0, 0.86, 0.72) * 0.07;',
+  '  vec2 q = (2.0 * gl_FragCoord.xy - uRes) / uRes.y; vec2 e = uv - 0.5;',
+  '  vec3 rdv = normalize(q.x * uCamR + q.y * uCamU + uFocal * uCamF);',
+  '  float sd = max(dot(rdv, SUN), 0.0);',
+  '  c += vec3(1.0, 0.55, 0.26) * (pow(sd, 6.0) * 0.05 + pow(sd, 48.0) * 0.07);',
+  '  float sz = dot(SUN, uCamF);',
+  '  if (sz > 0.08 && sd > 0.35) {',
+  '    vec2 sq = vec2(dot(SUN, uCamR), dot(SUN, uCamU)) * (uFocal / sz);',
+  '    vec2 us = (sq * uRes.y + uRes) * 0.5 / uRes;',
+  '    float acc = 0.0;',
+  '    for (int k = 1; k <= 6; k++) {',
+  '      vec4 s = texture2D(tex, mix(uv, us, float(k) / 8.5));',
+  '      acc += step(0.9995, s.a) * dot(s.rgb, vec3(0.33));',
+  '    }',
+  '    c += vec3(1.0, 0.62, 0.34) * (acc / 6.0) * pow(sd, 3.0) * 0.16;',
+  '  }',
+  '  vec2 ev = e * vec2(1.0, 0.85); c *= 1.0 - 0.42 * dot(ev, ev);',
+  '  float lm = dot(c, vec3(0.299, 0.587, 0.114));',
+  '  c = mix(c + vec3(-0.004, 0.0, 0.016) * (1.0 - lm), c * vec3(1.035, 1.0, 0.955), smoothstep(0.55, 1.0, lm));',
+  '  c = clamp(c, 0.0, 1.0);',
+  '  c = mix(c, c * c * (3.0 - 2.0 * c), 0.14);',
+  '  c += (h21(gl_FragCoord.xy) - 0.5) / 255.0;',
+  '  gl_FragColor = vec4(c, 1.0);',
+  '}'
+].join('\n');
+var V3 = function () { return { value: new THREE.Vector3() }; };
+var RU = {
+  tCur: { value: null }, tHist: { value: null }, uRes: U.uRes, uReset: { value: 1 },
+  cPos: V3(), cR: V3(), cU: V3(), cF: V3(), cFocal: { value: 1 }, pPos: V3(), pR: V3(), pU: V3(), pF: V3(), pFocal: { value: 1 },
+  cRP: V3(), cRX: V3(), cRY: V3(), cRZ: V3(), pRP: V3(), pRX: V3(), pRY: V3(), pRZ: V3()
+};
+var BU = { tex: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uLow: U.uRes, uCamR: U.uCamR, uCamU: U.uCamU, uCamF: U.uCamF, uFocal: U.uFocal };
+var resScene = new THREE.Scene(), blitScene = new THREE.Scene();
+resScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: RU, vertexShader: VS, fragmentShader: FS_RES, depthTest: false, depthWrite: false })));
+blitScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: BU, vertexShader: VS, fragmentShader: FS_BLIT, depthTest: false, depthWrite: false })));
+var rtS = null, rtH = [null, null], hIdx = 0, resetFrames = 3, jitterN = 0;
+var prevCam = { pos: new THREE.Vector3(), r: new THREE.Vector3(), u: new THREE.Vector3(), f: new THREE.Vector3(), focal: 1, rp: new THREE.Vector3(), rx: new THREE.Vector3(), ry: new THREE.Vector3(), rz: new THREE.Vector3() };
+function halton(i, b) { var f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; }
+function makeTargets(w, h) {
+  var o = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false };
+  if (rtS) { rtS.dispose(); rtH[0].dispose(); rtH[1].dispose(); }
+  rtS = new THREE.WebGLRenderTarget(w, h, Object.assign({ minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }, o));
+  rtH[0] = new THREE.WebGLRenderTarget(w, h, Object.assign({ minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }, o));
+  rtH[1] = new THREE.WebGLRenderTarget(w, h, Object.assign({ minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }, o));
+  resetFrames = 3;
+}
+function renderFrame() {
+  if (!taa) { U.uTaa.value = 0; renderer.render(scene, cam); return; }
+  U.uTaa.value = 1;
+  jitterN = (jitterN % 8) + 1;
+  U.uJit.value.set(halton(jitterN, 2) - 0.5, halton(jitterN, 3) - 0.5);
+  renderer.setRenderTarget(rtS); renderer.render(scene, cam);
+  RU.tCur.value = rtS.texture; RU.tHist.value = rtH[hIdx].texture;
+  RU.cPos.value.copy(U.uCamPos.value); RU.cR.value.copy(U.uCamR.value); RU.cU.value.copy(U.uCamU.value); RU.cF.value.copy(U.uCamF.value); RU.cFocal.value = U.uFocal.value;
+  RU.pPos.value.copy(prevCam.pos); RU.pR.value.copy(prevCam.r); RU.pU.value.copy(prevCam.u); RU.pF.value.copy(prevCam.f); RU.pFocal.value = prevCam.focal;
+  RU.cRP.value.copy(U.uRPos.value); RU.cRX.value.copy(U.uRX.value); RU.cRY.value.copy(U.uRY.value); RU.cRZ.value.copy(U.uRZ.value);
+  RU.pRP.value.copy(prevCam.rp); RU.pRX.value.copy(prevCam.rx); RU.pRY.value.copy(prevCam.ry); RU.pRZ.value.copy(prevCam.rz);
+  RU.uReset.value = resetFrames > 0 ? 1 : 0; if (resetFrames > 0) resetFrames--;
+  var nx = 1 - hIdx;
+  renderer.setRenderTarget(rtH[nx]); renderer.render(resScene, cam);
+  BU.tex.value = rtH[nx].texture;
+  renderer.setRenderTarget(null); renderer.render(blitScene, cam);
+  hIdx = nx;
+  prevCam.pos.copy(U.uCamPos.value); prevCam.r.copy(U.uCamR.value); prevCam.u.copy(U.uCamU.value); prevCam.f.copy(U.uCamF.value); prevCam.focal = U.uFocal.value;
+  prevCam.rp.copy(U.uRPos.value); prevCam.rx.copy(U.uRX.value); prevCam.ry.copy(U.uRY.value); prevCam.rz.copy(U.uRZ.value);
+}
+
+// adaptive resolution
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var pr = Math.min(Math.max(dpr, 1), 1.1);
+var prMax = Math.min(Math.max(dpr, 1) * 1.3, 2.0), prMin = 0.4;
+var qp = parseFloat(new URLSearchParams(location.search).get('pr'));
+if (qp > 0) { pr = prMax = prMin = qp; }
+var debugOn = qp > 0;
+function resize() {
+  if (taa) {
+    // the canvas keeps the screen's own resolution, the scene is traced at pr times the page size and filtered up
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    var vn = new THREE.Vector2(); renderer.getDrawingBufferSize(vn); BU.uRes.value.copy(vn);
+    var lw = Math.max(2, Math.round(window.innerWidth * pr)), lh = Math.max(2, Math.round(window.innerHeight * pr));
+    U.uRes.value.set(lw, lh);
+    makeTargets(lw, lh);
+  } else {
+    renderer.setPixelRatio(pr);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    var v = new THREE.Vector2(); renderer.getDrawingBufferSize(v); U.uRes.value.copy(v);
+  }
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---- game state ----
+function pickSpawn() {
+  // every run starts somewhere else on the (very large, endlessly repeating) generated hill: a random spot with open snow and no landform under it
+  var cands = [], best = 0, bv = 1e9, z0 = Math.floor(Math.random() * 120000 / 8) * 8;
+  for (var x = 0; x < P; x += 8) {
+    var v = 0, zc = 0;
+    for (var dz = -20; dz <= 160; dz += 20) for (var dx = -36; dx <= 36; dx += 18) { v = Math.max(v, forestAt(x + dx, z0 + dz)); zc = Math.max(zc, zoneMaskAny(x + dx, z0 + dz)); }
+    v += zc * 2 + chanW(x, z0) * 0.5;
+    if (v < bv) { bv = v; best = x; }
+    if (v < 0.45) cands.push(x);
+  }
+  var x0 = cands.length ? cands[Math.floor(Math.random() * cands.length)] : best;
+  return [x0, z0];
+}
+var S = {
+  x: 0, z: 0, y: 0, vx: 0, vz: 5, vy: 0, th: 0, air: false, gv: 0, steer: 0, lean: 0, brake: 0, cool: 0, gvPk: 0, psiS: 0, crouch: 0.2, airS: 0, kick: 0, burst: 0, ice: 0,
+  n: [0, 1, 0], camYaw: 0, camY: 0, slopeAhead: -SLOPE, trail: [], sprayAcc: 0
+};
+var sp0 = pickSpawn(); S.x = sp0[0]; S.z = sp0[1]; S.y = hgt(S.x, S.z);
+S.camY = S.y + 3;
+var mode = 'menu', time = 0;
+if (debugOn) { window.__taa = taa; window.__S = S; window.__f = forestAt; window.__hgt = hgt; window.__trees = treesNear; window.__chan = chanW; window.__ridge = ridgeW; window.__roll = rollH; window.__fw = forestW; window.__cab = cabinAtCell; window.__sim = simulate; window.__rec = recordTrail; window.__cam = function () { var sp = Math.hypot(S.vx, S.vz); for (var i = 0; i < 90; i++) placeCamera(1 / 60, sp); }; window.__spr = function (dt) { var sp = Math.hypot(S.vx, S.vz); updateSpray(dt, riderBasis(sp), sp); }; window.__rb = rockBump; window.__zp = function (x, z) { var m = zoneMaskAny(x, z); return [_z.ty, m, _z.dx, _z.dz, _z.R]; }; }
+var keys = { left: false, right: false, up: false, down: false }, hopReq = false, drag = null, dragSteer = 0;
+
+function curTh() { return Math.hypot(S.vx, S.vz) > 0.8 ? Math.atan2(S.vx, S.vz) : S.th; }
+
+function crestDrop(sp, hN, gvN) {
+  var L = clamp(0.45 * sp, 3, 10), ux = S.vx / sp, uz = S.vz / sp;
+  return hN + gvN * (L / sp) - hgt(S.x + ux * L, S.z + uz * L);
+}
+function simulate(dt, steerIn, hop, leanIn, brakeIn) {
+  S.steer += (steerIn - S.steer) * damp(7, dt);
+  S.cool -= dt;
+  S.ice += (iceAt(S.x, S.z) - S.ice) * damp(8, dt);
+  S.lean += ((leanIn ? 1 : 0) - S.lean) * damp(4, dt);
+  S.brake += ((brakeIn ? 1 : 0) - S.brake) * damp(6, dt);
+  var g = grad(S.x, S.z);
+  if (!S.air) {
+    var k = -G / (1 + g[0] * g[0] + g[1] * g[1]) * (1 + 0.22 * S.lean);
+    S.vx += k * g[0] * dt; S.vz += k * g[1] * dt;
+    // a soft minimum glide along the board so you never stall on flat ground
+    var s0 = Math.hypot(S.vx, S.vz);
+    if (s0 < VMIN) {
+      var a = Math.min(3.6, (VMIN - s0) * 1.8 + 0.5), t0 = curTh();
+      S.vx += Math.sin(t0) * a * dt; S.vz += Math.cos(t0) * a * dt;
+    }
+    // tucked forward you can also push along on the flat
+    if (S.lean > 0.05 && s0 < 18) { var t1 = curTh(), pa = 2.2 * S.lean * (1 - s0 / 18); S.vx += Math.sin(t1) * pa * dt; S.vz += Math.cos(t1) * pa * dt; }
+  }
+  var sp = Math.hypot(S.vx, S.vz);
+  var dragK = Math.max(0, 1 - ((0.02 + 0.011 * sp) * (1 - 0.5 * S.lean) * (1 - 0.45 * S.ice) + (S.air ? 0 : 0.3 * powderAt(S.x, S.z) + 0.55 * S.brake * (1 - 0.75 * S.ice))) * dt);
+  S.vx *= dragK; S.vz *= dragK;
+  sp = Math.hypot(S.vx, S.vz);
+  var th = curTh();
+  var carve = (S.air ? 0.2 : 1) * 2.0 * Math.min(1, 0.45 + sp / 14) * (1 - 0.25 * S.lean) / (1 + 0.02 * Math.max(0, sp - 12)) * (1 - 0.72 * S.ice);
+  var off = -S.steer * 0.55;
+  var dth = off * (1 - Math.exp(-carve * dt));
+  th += dth; S.th = th;
+  if (!S.air) sp *= 1 - 0.1 * Math.abs(dth);
+  S.vx = Math.sin(th) * sp; S.vz = Math.cos(th) * sp;
+  S.x += S.vx * dt; S.z += S.vz * dt;
+  var pc = pushFromTrees(S.x, S.z, 0.4);
+  if (pc.hit) {
+    S.x = pc.x; S.z = pc.z;
+    var vn = S.vx * pc.nx + S.vz * pc.nz;
+    if (vn < 0) { S.vx -= vn * pc.nx * 1.12; S.vz -= vn * pc.nz * 1.12; S.burst = Math.max(S.burst, Math.min(8, -vn)); }
+  }
+  var hN = hgt(S.x, S.z);
+  var g2 = grad(S.x, S.z);
+  var gvN = g2[0] * S.vx + g2[1] * S.vz;
+  if (!S.air) {
+    var yb = S.y + S.gv * dt - 0.5 * G * dt * dt;
+    if (hop) { S.air = true; S.vy = S.gv + 4.4; S.y = Math.max(S.y, hN) + 0.02; }
+    else if (yb > hN + 0.02 && sp > 3) { S.air = true; S.vy = S.gv - G * dt; S.y = yb; }
+    else { S.y = hN; S.gv = gvN; S.gvPk = Math.max(gvN, S.gvPk * Math.exp(-dt / 0.12)); }
+  } else {
+    S.vy -= G * dt; S.y += S.vy * dt;
+    if (S.y <= hN) {
+      var impact = Math.max(0, -(S.vy - gvN));
+      S.y = hN; S.air = false; S.gv = gvN; S.gvPk = gvN; S.cool = 0.2;
+      S.kick = Math.min(1, impact / 7);
+      if (impact > 2) S.burst = Math.max(S.burst, impact);
+      var l = 1 - Math.min(0.1, impact * 0.01); S.vx *= l; S.vz *= l;
+    }
+  }
+  S.n = lerp3(S.n, norm([-g2[0], 1, -g2[1]]), damp(12, dt));
+  S.psiS += wrapA(th + off - S.psiS) * damp(12, dt);
+  S.airS += ((S.air ? 1 : 0) - S.airS) * damp(S.air ? 9 : 14, dt);
+  S.kick *= Math.exp(-5 * dt);
+  var ct = 0.18 + 0.32 * Math.abs(S.steer) * Math.min(1, sp / 10) + (S.air ? 0.55 : 0) + S.kick * 0.8 + 0.4 * S.lean;
+  S.crouch += (Math.min(1, ct) - S.crouch) * damp(9, dt);
+}
+
+// how hard the board is carving: sign = turn side, size 0 (straight) .. 1 (sharp, at speed)
+function turnNow() { var sp = Math.hypot(S.vx, S.vz); return S.air ? 0 : clamp(S.steer * 1.25, -1, 1) * clamp((sp - 3) / 7, 0, 1); }
+function recordTrail() {
+  var tr = S.trail, last = tr[0];
+  if (!last || Math.hypot(S.x - last[0], S.z - last[1]) > 1.0) tr.unshift([S.x, S.z, S.air || S.ice > 0.4 ? 0 : clamp(0.6 + 0.5 * Math.abs(S.steer), 0, 1), turnNow()]);
+  if (tr.length > 47) tr.length = 47;
+}
+
+function placeCamera(dt, sp) {
+  S.camYaw += wrapA(curTh() - S.camYaw) * damp(1.8, dt);
+  var sa = (hgt(S.x + Math.sin(S.camYaw) * 18, S.z + Math.cos(S.camYaw) * 18) - S.y) / 18;
+  S.slopeAhead += (sa - S.slopeAhead) * damp(1.4, dt);
+  var dist = 7.0 + sp * 0.08;
+  var cx = S.x - Math.sin(S.camYaw) * dist, cz = S.z - Math.cos(S.camYaw) * dist;
+  var pcm = pushFromTrees(cx, cz, 1.2); cx = pcm.x; cz = pcm.z;
+  var gh = hgt(cx, cz);
+  S.camY += ((gh + 2.4) - S.camY) * damp(3.5, dt);
+  S.camY = Math.max(S.camY, gh + 1.3);
+  var cy = S.camY - S.kick * 0.2;
+  var pitch = 0.55 * Math.atan(S.slopeAhead) - 0.05;
+  var cp = Math.cos(pitch);
+  var f = [Math.sin(S.camYaw) * cp, Math.sin(pitch), Math.cos(S.camYaw) * cp];
+  var right = norm(cross(f, [0, 1, 0]));
+  var upv = cross(right, f);
+  var roll = -S.steer * 0.035;
+  var r2 = add(mul(right, Math.cos(roll)), mul(upv, Math.sin(roll)));
+  var u2 = cross(r2, f);
+  return { pos: [cx, cy, cz], f: f, r: r2, u: u2, focal: 1.6 - Math.min(0.2, sp * 0.01) };
+}
+
+function riderBasis(sp) {
+  var up0 = norm(lerp3(S.n, [0, 1, 0], S.airS * 0.7));
+  var dirG = [Math.sin(S.psiS), 0, Math.cos(S.psiS)];
+  var fwdG = norm(sub(dirG, mul(S.n, dot(dirG, S.n))));
+  var v3 = norm([S.vx, S.vy, S.vz]);
+  var fwd = norm(lerp3(fwdG, v3, S.airS));
+  fwd = norm(sub(fwd, mul(up0, dot(fwd, up0))));
+  var x = cross(up0, fwd);
+  var r = S.steer * 0.32 * Math.min(1, sp / 10);
+  var up = norm(add(mul(up0, Math.cos(r)), mul(x, -Math.sin(r))));
+  x = cross(up, fwd);
+  return { x: x, y: up, z: fwd };
+}
+
+// ---- snow dust behind the board ----
+var spray = [];
+if (debugOn) window.__spray = spray;
+function rnd() { return Math.random(); }
+function puff(pos, vel, r0, life, a0) {
+  if (spray.length >= MAXS) spray.shift();
+  spray.push({ x: pos[0], y: pos[1], z: pos[2], vx: vel[0], vy: vel[1], vz: vel[2], r0: r0, life: life, a0: a0, age: 0 });
+}
+function updateSpray(dt, b, sp) {
+  var pos0 = [S.x, S.y, S.z], vel0 = [S.vx, S.gv, S.vz];
+  if (!S.air && sp > 1.5) {
+    var pwd = powderAt(S.x, S.z);
+    S.sprayAcc += (1 - S.ice) * 0.5 * sp * (0.5 + 2.4 * Math.abs(S.steer) + 2.2 * pwd) * sm(1.5, 6, sp) * (1 + 0.25 * S.lean) * dt;
+    while (S.sprayAcc >= 1) {
+      S.sprayAcc -= 1;
+      var side = Math.abs(S.steer) > 0.05 ? Math.sign(S.steer) : (rnd() < 0.5 ? -1 : 1);
+      var p = add(add(pos0, mul(b.z, -0.6 - rnd() * sp * dt)), add(mul(b.x, (rnd() - 0.5) * 0.4), mul(b.y, 0.1)));
+      var v = add(mul(vel0, 0.2), add(mul(b.x, side * (0.4 + 0.9 * Math.abs(S.steer)) * (0.5 + rnd()) * Math.min(4, sp * 0.25) + (rnd() - 0.5) * 0.8), add(mul(b.y, 0.6 + rnd() * 1.6), [(rnd() - 0.5) * 0.8, 0, (rnd() - 0.5) * 0.8])));
+      puff(p, v, 0.1 + rnd() * 0.1 + 0.06 * pwd, 0.9 + rnd() * 0.9 + 0.5 * pwd, (0.35 + 0.3 * rnd() + 0.2 * pwd) * Math.min(1, 0.4 + sp / 14));
+    }
+  }
+  // a hard carve throws a fan of snow off the edge, to the outside of the turn
+  var hard = Math.abs(turnNow());
+  if (!S.air && hard > 0.45) {
+    S.hardAcc = (S.hardAcc || 0) + (1 - S.ice) * (hard - 0.4) * sp * 0.5 * (2.2 + 2.5 * powderAt(S.x, S.z)) * dt;
+    while (S.hardAcc >= 1) {
+      S.hardAcc -= 1;
+      var sd2 = Math.sign(S.steer) || 1;
+      var p2 = add(add(pos0, mul(b.z, -0.15 + (rnd() - 0.5) * 0.7)), add(mul(b.x, sd2 * 0.18), mul(b.y, 0.08)));
+      var v2 = add(mul(vel0, 0.45), add(mul(b.x, sd2 * (1.8 + rnd() * 2.2 + sp * 0.12)), add(mul(b.y, 1.2 + rnd() * 2.2), [(rnd() - 0.5) * 0.6, 0, (rnd() - 0.5) * 0.6])));
+      puff(p2, v2, 0.2 + rnd() * 0.18, 0.9 + rnd() * 0.8, 0.65 + 0.25 * rnd());
+    }
+  } else S.hardAcc = 0;
+  if (S.burst > 0) {
+    var n = Math.min(6, Math.round(S.burst * 0.8));
+    for (var k = 0; k < n; k++) {
+      var ang = rnd() * 6.283, rr = 0.6 + rnd() * 1.6;
+      puff(add(pos0, [0, 0.1, 0]), [Math.cos(ang) * rr + S.vx * 0.2, 0.8 + rnd() * 1.6, Math.sin(ang) * rr + S.vz * 0.2], 0.16 + rnd() * 0.12, 1.1 + rnd() * 0.8, 0.5);
+    }
+    S.burst = 0;
+  }
+  var dk = Math.exp(-2.1 * dt);
+  for (var i = spray.length - 1; i >= 0; i--) {
+    var q = spray[i];
+    q.age += dt;
+    if (q.age >= q.life) { spray.splice(i, 1); continue; }
+    q.vx *= dk; q.vz *= dk; q.vy = q.vy * dk - 1.3 * dt;
+    q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
+  }
+}
+
+var Rx = 0, Rz = 0;   // rebase origin, multiples of the terrain period. Local y = world y + SLOPE * Rz
+
+// ---- input ----
+var readyN = 0;
+function startRide() {
+  if (mode === 'play' || readyN < 8) return;
+  mode = 'play';
+  document.getElementById('menu').classList.add('hidden');
+  initAudio();
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+function openMenu() {
+  mode = 'menu';
+  document.getElementById('menu').classList.remove('hidden');
+}
+document.getElementById('go').addEventListener('click', startRide);
+window.addEventListener('keydown', function (e) {
+  var k = e.key;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = true;
+  else if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = true;
+  else if (k === 'ArrowUp' || k === 'w' || k === 'W') { keys.up = true; e.preventDefault(); }
+  else if (k === 'ArrowDown' || k === 's' || k === 'S') { keys.down = true; e.preventDefault(); }
+  else if (k === ' ' || k === 'Spacebar') { if (mode === 'play') { hopReq = true; e.preventDefault(); } }
+  else if (k === 'Escape') { if (mode === 'play') openMenu(); else startRide(); }
+  else if (k === 'm' || k === 'M') toggleMute();
+  else if (k === 'Enter' && mode === 'menu') startRide();
+});
+window.addEventListener('keyup', function (e) {
+  var k = e.key;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+  if (k === 'ArrowUp' || k === 'w' || k === 'W') keys.up = false;
+  if (k === 'ArrowDown' || k === 's' || k === 'S') keys.down = false;
+});
+window.addEventListener('blur', function () { keys.left = keys.right = keys.up = keys.down = false; });
+canvas.addEventListener('pointerdown', function (e) {
+  if (mode !== 'play') return;
+  drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false };
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+});
+canvas.addEventListener('pointermove', function (e) {
+  if (!drag) return;
+  var dx = e.clientX - drag.x;
+  if (Math.abs(dx) > 10) drag.moved = true;
+  dragSteer = clamp(dx / 90, -1, 1);
+});
+function endDrag() {
+  if (drag && !drag.moved && performance.now() - drag.t < 260) hopReq = true;
+  drag = null; dragSteer = 0;
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+document.addEventListener('visibilitychange', function () { if (document.hidden && mode === 'play') openMenu(); });
+
+// the start screen rides by itself: weave gently, face downhill, steer around trunks
+function autoSteer() {
+  var th = curTh(), st = clamp(th * 0.9, -1, 1) + 0.4 * Math.sin(time * 0.33);
+  var sn = Math.sin(th), cs = Math.cos(th), ts = treesNear(S.x, S.z, 26);
+  for (var i = 0; i < ts.length; i++) {
+    var dx = ts[i].x - S.x, dz = ts[i].z - S.z, along = dx * sn + dz * cs;
+    if (along > 0.5 && along < 24) {
+      var cr = dx * cs - dz * sn;
+      if (Math.abs(cr) < 3.4) st += (cr >= 0 ? 1 : -1) * (1.6 * (1 - along / 24) + 0.4);
+    }
+  }
+  return clamp(st, -1, 1);
+}
+
+// ---- sound: wind, snow carving and a soft pad ----
+var ac = null, master, windG, windF, carveG, carveF, muted = false;
+function initAudio() {
+  if (ac || !(window.AudioContext || window.webkitAudioContext)) return;
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    master = ac.createGain(); master.gain.value = muted ? 0 : 0.6; master.connect(ac.destination);
+    var len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0), last = 0;
+    for (var i = 0; i < len; i++) { var w = Math.random() * 2 - 1; last = (last + 0.04 * w) / 1.04; d[i] = last * 6; }
+    var noise = function () { var s = ac.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; };
+    windF = ac.createBiquadFilter(); windF.type = 'bandpass'; windF.frequency.value = 400; windF.Q.value = 0.5;
+    windG = ac.createGain(); windG.gain.value = 0.05;
+    noise().connect(windF); windF.connect(windG); windG.connect(master);
+    var cf = ac.createBiquadFilter(); cf.type = 'bandpass'; cf.frequency.value = 1700; cf.Q.value = 0.7;
+    carveG = ac.createGain(); carveG.gain.value = 0;
+    carveF = cf; noise().connect(cf); cf.connect(carveG); carveG.connect(master);
+    var padG = ac.createGain(); padG.gain.value = 0.0; padG.connect(master);
+    [110, 164.81, 220, 277.18, 329.63].forEach(function (f, i) {
+      var o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.detune.value = (i - 2) * 4;
+      var lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = 0.05 + i * 0.013; lg.gain.value = 0.08;
+      var og = ac.createGain(); og.gain.value = 0.6; lfo.connect(lg); lg.connect(og.gain);
+      o.connect(og); og.connect(padG); o.start(); lfo.start();
+    });
+  } catch (e) { ac = null; }
+}
+function toggleMute() { muted = !muted; if (master) master.gain.setTargetAtTime(muted ? 0 : 0.6, ac.currentTime, 0.1); }
+function updateAudio(sp) {
+  if (!ac) return;
+  var t = ac.currentTime;
+  // quiet bed of wind plus gusts that come and go
+  var gust = Math.max(0, Math.sin(time * 0.23) * Math.sin(time * 0.071 + 1.0));
+  windG.gain.setTargetAtTime(0.0012 + sp * 0.0002 + gust * 0.035 + (S.air ? 0.012 : 0), t, 0.35);
+  windF.frequency.setTargetAtTime(260 + sp * 30 + gust * 300, t, 0.3);
+  carveG.gain.setTargetAtTime(S.air ? 0 : (0.006 + Math.abs(S.steer) * 0.09 + 0.02 * S.ice) * sm(3, 14, sp) * (1 + 0.6 * S.ice), t, 0.1);
+  // on ice the edge scrapes: a thin, high hiss instead of the soft crunch of snow
+  carveF.frequency.setTargetAtTime(1700 + 3300 * S.ice, t, 0.1); carveF.Q.value = 0.7 + 3.0 * S.ice;
+}
+
+if (debugOn) window.__adv = function (steps, steerIn, vmin) {
+  for (var i = 0; i < steps; i++) {
+    simulate(1 / 60, steerIn, false); recordTrail();
+    var sp = Math.hypot(S.vx, S.vz);
+    if (vmin && sp < vmin) { S.vx *= vmin / Math.max(sp, 0.1); S.vz *= vmin / Math.max(sp, 0.1); }
+    updateSpray(1 / 60, riderBasis(sp), sp); placeCamera(1 / 60, sp);
+  }
+};
+// ---- main loop ----
+var last = performance.now(), frames = 0, fpsT = 0, cooldown = 0, refreshMs = 17.5;
+function frame(now) {
+  requestAnimationFrame(frame);
+  var dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (dt <= 0) return;
+  time += dt;
+  var steerIn;
+  if (mode === 'play') {
+    steerIn = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if (drag) steerIn = dragSteer;
+  } else steerIn = autoSteer();
+  var hop = hopReq && mode === 'play'; hopReq = false;
+  var leanIn = mode === 'play' && (keys.up || (drag && !drag.moved && performance.now() - drag.t > 320)), brakeIn = mode === 'play' && keys.down;
+  var n = dt > 1 / 40 ? 2 : 1;
+  for (var i = 0; i < n; i++) simulate(dt / n, steerIn, hop && i === 0, leanIn, brakeIn);
+  recordTrail();
+  var sp = Math.hypot(S.vx, S.vz);
+  Rx = Math.floor(S.x / P) * P; Rz = Math.floor(S.z / P) * P;
+  var oy = SLOPE * Rz;
+  U.uRz.value = ((Rz % 16384) + 16384) % 16384; U.uRzB.value = ((Rz % 65536) + 65536) % 65536;
+  var c = placeCamera(dt, sp);
+  var b = riderBasis(sp);
+  updateSpray(dt, b, sp);
+  U.uTime.value = time % 4000;
+  U.uCamPos.value.set(c.pos[0] - Rx, c.pos[1] + oy, c.pos[2] - Rz);
+  updateZones(c.pos[0], c.pos[2]);
+  for (var zk = 0; zk < 2; zk++) { var zq = U[ZU[zk]].value, ze = zList[zk]; if (ze) zq.set(ze.x - Rx, ze.z - Rz, ze.b2, ze.w); else zq.set(0, 0, 0, 0); }
+  U.uZH.value.set(zList[0] ? zList[0].hc : 0, zList[1] ? zList[1].hc : 0);
+  U.uCamR.value.set(c.r[0], c.r[1], c.r[2]); U.uCamU.value.set(c.u[0], c.u[1], c.u[2]); U.uCamF.value.set(c.f[0], c.f[1], c.f[2]);
+  U.uFocal.value = c.focal;
+  U.uRPos.value.set(S.x - Rx, S.y + oy, S.z - Rz);
+  U.uRX.value.set(b.x[0], b.x[1], b.x[2]); U.uRY.value.set(b.y[0], b.y[1], b.y[2]); U.uRZ.value.set(b.z[0], b.z[1], b.z[2]);
+  U.uCrouch.value = S.crouch; U.uSteer.value = S.steer; U.uAir.value = S.airS; U.uSpeed.value = sp;
+  var tv = U.uTrail.value;
+  for (var j = 0; j < 48; j++) {
+    var p = j === 0 ? [S.x, S.z, S.air || S.ice > 0.4 ? 0 : clamp(0.6 + 0.5 * Math.abs(S.steer), 0, 1), turnNow()] : S.trail[j - 1];
+    if (p) tv[j].set(p[0] - Rx, p[1] - Rz, p[2], p[3]); else tv[j].set(0, 0, 0, 0);
+  }
+  for (var m = 0; m < MAXS; m++) {
+    var q = spray[m];
+    if (q) {
+      var ag = q.age / q.life;
+      var qa = q.a0 * Math.pow(1 - ag, 1.4) * Math.min(1, q.age * 6);
+      U.uSpray.value[m].set(q.x - Rx, q.y + oy, q.z - Rz, Math.round(qa * 63) * 8 + Math.min(7.5, q.r0 * (1 + 4.5 * ag)));
+    } else U.uSpray.value[m].set(0, 0, 0, 0);
+  }
+  renderFrame();
+  if (readyN < 8 && window.__prog) window.__prog(0.4 + 0.6 * (readyN + 1) / 8);
+  if (readyN < 8 && ++readyN === 8) { document.getElementById('splash').classList.add('done'); var gb = document.getElementById('go'); gb.disabled = false; gb.textContent = 'Start'; }
+  updateAudio(sp);
+  // keep the frame rate smooth by trading resolution
+  frames++; fpsT += dt; cooldown -= dt;
+  if (fpsT > 0.8) {
+    var ms = fpsT / frames * 1000; frames = 0; fpsT = 0;
+    // the frame time can never be shorter than the screen's refresh interval, so judge against the shortest seen
+    refreshMs = Math.min(Math.max(ms, 5), refreshMs * 1.01 + 0.02, 17.5);
+    if (cooldown <= 0) {
+      if ((ms > Math.max(24, refreshMs * 1.7)) && pr > prMin) { pr = Math.max(prMin, pr * 0.88); resize(); cooldown = 1.2; }
+      else if (ms < refreshMs * 1.18 && pr < prMax) { pr = Math.min(prMax, pr * 1.07); resize(); cooldown = 2.0; }
+    }
+  }
+}
+
+// debug: compare the shader's height with the physics height on a grid (local coordinates), returns [maxAbsDiff, worstX, worstZ, jsH, gpuH]
+if (debugOn) {
+  window.__gpuCmp = function (cx, cz, half, n) {
+    var src = document.getElementById('fs').textContent;
+    var f1 = src.substring(0, src.indexOf('// ---------- atmosphere ----------'));
+    var m = new THREE.ShaderMaterial({ uniforms: Object.assign({ uGrid: { value: new THREE.Vector3() } }, U), vertexShader: VS,
+      fragmentShader: f1 + '\nuniform vec3 uGrid;\nvoid main() { vec2 p = uGrid.xy + (gl_FragCoord.xy - 0.5) * uGrid.z; float ty; vec2 d; float R, sd; bool ok = zoneParams(p.x, p.y, ty, d, R, sd); gl_FragColor = vec4(hgt(p.x, p.y), ok ? ty : -1.0, R, sd); }' });
+    var sc = new THREE.Scene(); sc.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m));
+    var rt = new THREE.WebGLRenderTarget(n, n, { type: THREE.FloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
+    var step = 2 * half / n, x0 = cx - Rx - half, z0 = cz - Rz - half;
+    m.uniforms.uGrid.value.set(x0, z0, step);
+    renderer.setRenderTarget(rt); renderer.render(sc, cam); renderer.setRenderTarget(null);
+    var buf = new Float32Array(n * n * 4); renderer.readRenderTargetPixels(rt, 0, 0, n, n, buf);
+    var worst = 0, wx = 0, wz = 0, wj = 0, wg = 0, oy = SLOPE * Rz;
+    for (var j = 0; j < n; j++) for (var i = 0; i < n; i++) {
+      var lx = x0 + i * step, lz = z0 + j * step, hj = hgt(lx + Rx, lz + Rz) + oy, hg = buf[(j * n + i) * 4];
+      var d = Math.abs(hj - hg); if (d > worst) { worst = d; wx = lx + Rx; wz = lz + Rz; wj = hj; wg = hg; }
+    }
+    m.dispose(); rt.dispose();
+    var row = []; for (var i2 = 0; i2 < n; i2 += 4) { var lx2 = x0 + i2 * step, lz2 = z0 + (n >> 1) * step; var bi = ((n >> 1) * n + i2) * 4; row.push([+(lx2 + Rx).toFixed(0), +(hgt(lx2 + Rx, lz2 + Rz) + oy).toFixed(2), +buf[bi].toFixed(2), buf[bi + 1], buf[bi + 2], +buf[bi + 3].toFixed(3)]); }
+    return [worst, wx, wz, wj, wg, zList.map(function (z) { return [z.x, z.z]; }), row];
+  };
+}
+if (window.__prog) window.__prog(0.4);
+requestAnimationFrame(frame);
+})();
+});});},0);
+</script>
+
+</body></html>
