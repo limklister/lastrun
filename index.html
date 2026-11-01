@@ -174,6 +174,45 @@ float wrapP(float d, float P) { return d - P * floor(d / P + 0.5); }
 // A snow-covered river bed (every 1024 m across) and soft ridges (every 512 m) wander down the hill.
 float chanC(float z) { float zz = z + uRz; return 35.0 * sin(W * 4.125 * zz + 0.4) + 10.0 * sin(W * 11.125 * zz + 2.0) + 300.0; }
 float chanW(float x, float z) { float d = wrapP(x - chanC(z), 1024.0); return exp(-(d * d) / 81.0); }
+// A frozen creek winds along the middle of every river bed: a narrow strip of ice, with open water in places.
+float creekM(float x, float z, out float opn) {
+  float zz = z + uRz;
+  float d = wrapP(x - chanC(z) - 1.8 * sin(W * 37.0 * zz + 0.6), 1024.0);
+  float cm = 1.0 - smoothstep(1.4, 3.2, abs(d));
+  opn = 0.0;
+  if (cm > 0.0) opn = smoothstep(0.6, 0.85, 0.5 + 0.25 * sin(W * 13.0 * zz + 1.3) + 0.25 * sin(W * 19.0 * zz + 4.1)) * (1.0 - smoothstep(0.8, 1.8, abs(d)));
+  return cm;
+}
+// Avalanche paths: now and then a lane of the slope has slid. A shallow chute (the track) that ends in a lumpy fan of debris.
+float avaM(float x, float z, out float deb) {
+  deb = 0.0;
+  return 0.0; // avalanche paths removed
+  float lane = floor(x / 128.0);
+  uint h = ihash((uint(mod(lane, 16.0)) * 2654435761u) ^ 0x51ed270bu);
+  if (u2f(h) > 0.08 + 0.2 * smoothstep(0.0, 0.8, bioAt(lane * 128.0, z))) return 0.0;
+  float ph = u2f(ihash(h + 2u)) * 6.2831853, p0 = u2f(ihash(h + 4u));
+  float xc = (lane + 0.25 + 0.5 * u2f(ihash(h + 1u))) * 128.0 + 9.0 * sin(W * 11.0 * z + ph) + 5.0 * sin(W * 29.0 * z + 2.0 * ph);
+  float wv = 7.0 + 5.0 * u2f(ihash(h + 3u));
+  float d = abs(x - xc);
+  float u = fract(z * 3.0 / 2048.0 + p0);
+  float trough = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.62, 0.75, u)) * (1.0 - smoothstep(wv * 0.6, wv, d));
+  deb = smoothstep(0.7, 0.78, u) * (1.0 - smoothstep(0.92, 1.0, u)) * (1.0 - smoothstep(wv * 0.8, wv * 1.7, d));
+  return trough;
+}
+float avaH(float x, float z) {
+  float deb; float tr = avaM(x, z, deb);
+  if (tr + deb <= 0.0) return 0.0;
+  return -0.7 * tr + deb * (0.3 + 0.38 * sin(W * 97.0 * z + 1.0 + 2.2 * sin(W * 41.0 * x + 0.3)) * sin(W * 59.0 * x + 0.4 + 2.0 * sin(W * 37.0 * z)) + 0.2 * sin(W * 67.0 * x + W * 43.0 * z + 2.5));
+}
+// long-wavelength relief: broad valleys, and now and then a real drop (a sawtooth: a very slow rise, then a sudden fall)
+float bigRelief(float x, float z) {
+  float zb = z + uRzB;
+  float h = 26.0 * sin(W * x + 1.2 + 1.5 * sin(W * 0.0625 * zb));
+  float u = zb / 16384.0 + 0.003 * sin(W * 3.0 * x + 1.0) + 0.005 * sin(W * 7.0 * x);
+  float ph = fract(u);
+  float m = smoothstep(0.3, 0.7, 0.5 + 0.5 * sin(W * 3.0 * x + 0.4)) * smoothstep(0.0, 0.6, bioAt(x, z));
+  return h + 14.0 * m * (ph - smoothstep(0.995, 1.0, ph));
+}
 float ridgeC(float z) { float zz = z + uRz; return 50.0 * sin(W * 2.875 * zz + 2.0) + 12.0 * sin(W * 9.75 * zz + 0.7) + 120.0; }
 float ridgeW(float x, float z) { float d = wrapP(x - ridgeC(z), 512.0); return exp(-(d * d) / 36.0); }
 // ---------- landforms: rare surprise sections, one candidate per 512 m cell ----------
@@ -203,8 +242,8 @@ bool zoneParams(float x, float z, out float ty, out vec2 d, out float R, out flo
   return false;
 }
 float zLen(vec2 d, float sd) { return length(d) + 6.0 * sin(d.x * 0.07 + sd * 10.0) * sin(d.y * 0.06 + sd * 7.0); }
-float gorgeX(vec2 d, float sd) { return 16.0 * sin(d.y * 0.04 + sd * 6.0); }
-float gorgeD(vec2 d, float sd) { return abs(d.x - gorgeX(d, sd)) + 2.5 * sin(d.y * 0.23 + sd * 20.0) + 1.5 * sin(d.y * 0.51 + d.x * 0.2); }
+float gorgeX(vec2 d, float sd) { return 16.0 * sin(d.y * 0.04 + sd * 6.0) + 6.0 * sin(d.y * 0.093 + sd * 11.0 + 1.0); }
+float gorgeD(vec2 d, float sd) { return abs(d.x - gorgeX(d, sd)) + 1.6 * sin(d.y * 0.23 + sd * 20.0 + 1.5 * sin(d.y * 0.071 + d.x * 0.05)) + 1.1 * sin(d.y * 0.37 + d.x * 0.17 + 2.0 * sin(d.y * 0.043 + sd * 3.0)); }
 float zoneMask(float x, float z, out float ty) {
   vec2 d; float R, sd;
   if (!zoneParams(x, z, ty, d, R, sd)) return 0.0;
@@ -215,12 +254,13 @@ float zoneMask(float x, float z, out float ty) {
 float zoneClear(float x, float z) { float ty; float w = zoneMask(x, z, ty); return (ty > 2.5 && ty < 3.5) ? 0.0 : w; }
 float zoneMaskAny(float x, float z) { float ty; return zoneMask(x, z, ty); }
 float rockLump(float x, float z) {
-  float l = sin(W * 45.0 * x + 0.5) * sin(W * 39.0 * z + 1.0) + 0.4 * sin(W * 91.0 * x + W * 77.0 * z);
-  return 2.2 * smoothstep(0.25, 0.95, l) + 0.7 * smoothstep(0.3, 0.9, sin(W * 131.0 * x + 1.7) * sin(W * 127.0 * z + 0.3));
+  // the lattice is warped hard, so the lumps come in irregular sizes and spacing instead of a regular grid of pits
+  float l = sin(W * 45.0 * x + 0.5 + 2.4 * sin(W * 11.0 * z + W * 5.0 * x)) * sin(W * 39.0 * z + 1.0 + 2.4 * sin(W * 9.0 * x + 0.7)) + 0.4 * sin(W * 91.0 * x + W * 77.0 * z + 2.0 * sin(W * 13.0 * x));
+  return 2.2 * smoothstep(0.25, 0.95, l) + 0.5 * smoothstep(0.35, 0.9, sin(W * 131.0 * x + 1.7 + 2.6 * sin(W * 23.0 * z)) * sin(W * 127.0 * z + 0.3 + 2.6 * sin(W * 29.0 * x + 1.0)));
 }
 // forest: fewer, separate groves, and none in the river bed
 float forestW0(float x, float z) { return smoothstep(0.57, 0.75, forestAt(x, z)) * (1.0 - smoothstep(0.2, 0.6, chanW(x, z))); }
-float forestW(float x, float z) { return forestW0(x, z) * (1.0 - smoothstep(0.1, 0.5, zoneClear(x, z))); }
+float forestW(float x, float z) { float dv; float av = avaM(x, z, dv); return forestW0(x, z) * (1.0 - smoothstep(0.1, 0.5, zoneClear(x, z))) * (1.0 - smoothstep(0.1, 0.5, max(av, dv))); }
 float roughAt(float g, float x, float z) { return max(1.0 - smoothstep(0.15, 0.55, abs(g)), forestW0(x, z)); }
 // Short, steep drops: a slow ramp up and a quick drop, in patches, along lines that bend across the slope.
 float rollH(float x, float z) { float zz = z + uRz;
@@ -229,6 +269,12 @@ float rollH(float x, float z) { float zz = z + uRz;
   float sawt = ph < 0.88 ? smoothstep(0.0, 0.88, ph) : 1.0 - smoothstep(0.88, 1.0, ph);
   float pat = smoothstep(0.0, 0.5, sin(W * 4.0 * x + 1.3) * sin(W * 4.75 * zz + 0.2) + 0.1);
   return 3.0 * sawt * pat;
+}
+float edgeLip(float g, float x) {
+  // a wind-sculpted cornice on the upper side of every drop, and a drift bank piled in the lee below it
+  float cor = 1.5 * (0.55 + 0.45 * sin(W * 11.0 * x + 0.9)) * exp(-pow((g + 0.21) / 0.055, 2.0));
+  float bank = 1.0 * (0.5 + 0.5 * sin(W * 7.0 * x + 2.0)) * exp(-pow((g - 0.36) / 0.12, 2.0));
+  return cor + bank;
 }
 // The smooth form of the hill, without the small ripples. Shadows use this one: at a 7 degree sun a ripple of
 // 0.3 m moves a shadow edge by 2-3 m, which drew long jagged "fangs" along every shadow boundary.
@@ -241,7 +287,7 @@ float hgtCore(float x, float z) { float zz = z + uRz;
            + 5.0 * sin(W * 7.0 * x + 2.0) * sin(W * 6.125 * zz + 0.5);
   h += hs * (1.0 + 0.5 * sin(W * 0.5 * zz + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
   h += 85.0 * sin(W * 0.25 * zz + 1.3) + 40.0 * sin(W * 0.375 * zz + 4.0);
-  h -= 6.0 * smoothstep(-0.25, 0.25, edgeG(x, z));
+  { float eg = edgeG(x, z); h -= 6.0 * smoothstep(-0.25, 0.25, eg); h += edgeLip(eg, x); } h += bigRelief(x, z);
   h += rollH(x, z) - 2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
   return h;
 }
@@ -257,7 +303,8 @@ float zoneApply(float x, float z, float h, out float calm, out float clr) {
     }
   } else if (ty < 1.5) {
     float env = 1.0 - smoothstep(0.55, 0.95, abs(d.y) / R);
-    h -= 9.0 * env * (1.0 - smoothstep(7.0, 19.0, gorgeD(d, sd)));
+    float gwv = 0.5 + 0.5 * sin(d.y * 0.033 + sd * 9.0);
+    h -= (6.0 + 4.0 * (0.5 + 0.5 * sin(d.y * 0.021 + sd * 5.0))) * env * (1.0 - smoothstep(6.0 + 3.0 * gwv, 17.0 + 5.0 * gwv, gorgeD(d, sd)));
     clr = (1.0 - smoothstep(0.6, 1.0, abs(d.y) / R)) * (1.0 - smoothstep(26.0, 56.0, abs(d.x - gorgeX(d, sd))));
   } else if (ty < 2.5) {
     float w = 1.0 - smoothstep(0.55, 1.0, zLen(d, sd) / R);
@@ -296,15 +343,24 @@ float zoneApply(float x, float z, float h, out float calm, out float clr) {
   return h;
 }
 float hgtBase(float x, float z) { float cm, cl; return zoneApply(x, z, hgtCore(x, z), cm, cl); }
+float windRidge(float x, float z) {
+  // gentle wind-built swells: long wavelengths (25 to 50 m), phases warped so no two crests line up, in irregular patches
+  float wpat = smoothstep(0.3, 0.75, sin(W * 5.0 * x + 0.4) * sin(W * 4.0 * z + 1.1) + 0.25 * sin(W * 9.0 * x + W * 7.0 * z));
+  if (wpat <= 0.0) return 0.0;
+  float a = sin(W * 61.0 * z + 2.0 * sin(W * 7.0 * x + W * 3.0 * z + 0.5));
+  float b = sin(W * 37.0 * x + W * 53.0 * z + 1.3 + 1.5 * sin(W * 11.0 * z));
+  float c = sin(W * 83.0 * z - W * 29.0 * x + 4.0 + 2.0 * sin(W * 17.0 * x));
+  return 0.24 * wpat * (0.5 * a + 0.3 * b + 0.2 * c);
+}
 float hgt0(float x, float z) {
   float fine = 1.5 * sin(W * 19.0 * z + 1.7 - W * 20.0 * x) + 0.55 * sin(W * 41.0 * z + 0.9 + W * 33.0 * x)
              + 1.1 * sin(W * 29.0 * x + W * 13.0 * z + 2.0) + 2.2 * sin(W * 21.0 * x + 1.1) * sin(W * 17.0 * z + 0.4);
   float env = smoothstep(0.55, 0.95, sin(W * 11.0 * z + 2.5 + W * 3.0 * x));
-  fine += env * 1.8 * sin(W * 68.0 * z + W * 2.0 * x);
+  fine += env * 1.2 * sin(W * 68.0 * z + W * 2.0 * x + 2.4 * sin(W * 9.0 * x + W * 13.0 * z));
   float cm, cl;
   float hb = zoneApply(x, z, hgtCore(x, z), cm, cl);
   float rg = max(1.0 - smoothstep(0.15, 0.55, abs(edgeG(x, z))), forestW0(x, z) * (1.0 - smoothstep(0.1, 0.5, cl)));
-  return hb + fine * (0.3 + 0.7 * rg) * (1.0 - cm);
+  return hb + fine * (0.3 + 0.7 * rg) * (1.0 - cm) + windRidge(x, z) * (1.0 - cm) + avaH(x, z);
 }
 
 // ---------- snow mounds: smooth bumps in the snow, some with stone showing through ----------
@@ -354,7 +410,7 @@ float hgtLOD(float x, float z) { float zz = z + uRz;
            + 5.0 * sin(W * 7.0 * x + 2.0) * sin(W * 6.125 * zz + 0.5);
   h += hs * (1.0 + 0.5 * sin(W * 0.5 * zz + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
   h += 85.0 * sin(W * 0.25 * zz + 1.3) + 40.0 * sin(W * 0.375 * zz + 4.0);
-  h -= 6.0 * smoothstep(-0.25, 0.25, edgeG(x, z));
+  { float eg = edgeG(x, z); h -= 6.0 * smoothstep(-0.25, 0.25, eg); h += edgeLip(eg, x); } h += bigRelief(x, z);
   h += -2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
   return h;
 }
@@ -372,6 +428,11 @@ bool gSh = false; float gRB = 1e5; bool gReal = true;   // gReal: the last mapK 
 // ---------- snow-covered tiered conifers on bare trunks ----------
 float epsAt(float t) { return 0.0008 * t + 0.002 + 0.0008 * max(t - 150.0, 0.0); }
 
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+  vec3 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
 float sdE(vec3 p, vec3 c, float a, float b) { return (length((p - c) * vec3(1.0, a / b, 1.0)) - a) * (b / a) * 0.9; }
 // typ 0: spruce (broad tiers), 1: slim fir (taller, narrower, more tiers), 2: pine (tall bare trunk, layered crown)
 vec2 treeSDF(vec3 q, float s, float seed, vec3 pw, float asp, float typ) {
@@ -382,6 +443,40 @@ vec2 treeSDF(vec3 q, float s, float seed, vec3 pw, float asp, float typ) {
   // the crowns sway in the gusts (same gust curve as the wind sound), a little more for big trees
   float gust = max(0.0, sin(uTime * 0.23) * sin(uTime * 0.071 + 1.0));
   vec2 swv = vec2(0.30 * gust + 0.04 * sin(uTime * 1.3 + seed * 40.0), 0.05 * sin(uTime * 0.9 + seed * 23.0)) * s;
+  if (typ > 2.5) {
+    float dist = length(pw - uCamPos);
+    vec3 qg = vec3(q.x, q.y - 0.6, q.z);                       // ground at y = 0
+    float sw = clamp(qg.y / (6.0 * s), 0.0, 1.0);
+    vec3 qs = qg - vec3(swv.x, 0.0, swv.y) * sw * sw * 0.6;
+    if (typ < 3.5) {
+      // birch: slim pale trunk and a few thin bare limbs
+      float H = 7.5 * s;
+      float tr = max(length(qs.xz) - (0.17 * s * (1.0 - 0.45 * clamp(qs.y / H, 0.0, 1.0)) + 0.01), qs.y - H) * 0.8;
+      float rb = max(0.05 * s, 0.0035 * dist);
+      float br = 1e5;
+      for (int i = 0; i < 3; i++) {
+        float fi = float(i), ang = seed * 20.0 + fi * 2.1;
+        vec3 a0 = vec3(0.0, (3.2 + 1.5 * fi) * s, 0.0);
+        vec3 b0 = a0 + vec3(cos(ang) * 1.5 * s, (1.1 + 0.3 * fi) * s, sin(ang) * 1.5 * s);
+        br = min(br, sdCapsule(qs, a0, b0, rb));
+      }
+      br = min(br, sdCapsule(qs, vec3(0.0, H * 0.85, 0.0), vec3(0.5 * s, H * 1.12, 0.3 * s), rb));
+      return vec2(min(tr, br), 3.1);
+    } else if (typ < 4.5) {
+      // dead tree: grey, tapering, snapped off at the top, with a couple of broken limbs
+      float H = 5.0 * s;
+      float tr = max(length(qs.xz) - (0.2 * s * (1.0 - 0.5 * clamp(qs.y / H, 0.0, 1.0)) + 0.015), qs.y - H) * 0.8;
+      float rb = max(0.06 * s, 0.0035 * dist);
+      float br = min(sdCapsule(qs, vec3(0.0, 2.6 * s, 0.0), vec3(1.1 * s, 3.4 * s, 0.2 * s), rb), sdCapsule(qs, vec3(0.0, 3.6 * s, 0.0), vec3(-0.9 * s, 4.2 * s, -0.5 * s), rb));
+      return vec2(min(tr, br), 3.2);
+    } else {
+      // shrub: a low snow-covered mound of brush
+      float d = sdE(qg, vec3(0.0, 0.32 * s, 0.0), 1.0 * s, 0.55 * s);
+      d = min(d, sdE(qg, vec3(0.55 * s, 0.26 * s, 0.3 * s), 0.7 * s, 0.42 * s));
+      d = min(d, sdE(qg, vec3(-0.45 * s, 0.24 * s, -0.35 * s), 0.65 * s, 0.4 * s));
+      return vec2(d, 2.0);
+    }
+  }
   if (typ > 1.5) {
     float yb = 1.5 * s + 1.0;
     float k = 1.0 - 0.9 * part;
@@ -427,24 +522,35 @@ vec2 trees(vec3 p) {
       float r3 = u2f(ihash(h + 3u));
       float dcam = length(tp - uCamPos.xz);
       // trees are not drawn beyond 215 m. They fade into the dark forest tint on the ground first (see shade), so none pop.
-      if (r3 < 0.85 && dcam < 215.0 && r3 < forestW(tp.x, tp.y) * 0.85) {
+      if (dcam < 215.0 && r3 < 0.85 && r3 < forestW(tp.x, tp.y) * 0.85) {
         float rs = u2f(ihash(h + 4u));
         float ra = u2f(ihash(h + 5u));
         float s = 0.4 + 0.85 * pow(rs, 1.5);
         // each tree bounds itself with its own radius, so the distance field is honest everywhere.
         // (A shared worst-case radius drew dark rings in the shadow and ambient occlusion around every tree cell.)
         float rtp = u2f(ihash(h + 6u));
-        float typ = rtp < 0.60 ? 0.0 : (rtp < 0.85 ? 1.0 : 2.0);
+        float typ = rtp < 0.50 ? 0.0 : (rtp < 0.72 ? 1.0 : (rtp < 0.80 ? 2.0 : (rtp < 0.88 ? 3.0 : (rtp < 0.93 ? 4.0 : 5.0))));
         float Rt = max((typ < 0.5 ? 2.6 * (1.0 - 0.2 * ra) : (typ < 1.5 ? 1.9 : 2.8)) * s * 1.07, 0.0045 * dcam + 0.05);
         if (hd < Rt + 0.6) {
           vec3 q = vec3(dd.x, p.y - hgt(tp.x, tp.y) + 0.6, dd.y);
           vec2 d = treeSDF(q, s, rs, p, ra, typ);
-          // a soft drift of snow piled round the foot of the trunk (look only, the rider ignores it)
-          float dr = sdE(q, vec3(0.35 * (ra - 0.5) * s, 0.3, 0.35 * (rtp - 0.5) * s), (1.2 + 0.7 * ra) * s, 0.55 * s);
-          if (dr < d.x) d = vec2(dr, 2.0);
           if (d.x < best.x) best = d;
         } else {
           gRB = min(gRB, hd - Rt);
+        }
+      } else if (dcam < 215.0 && u2f(ihash(h + 11u)) < 0.12 + 0.2 * smoothstep(-0.1, 0.8, bioAt(tp.x, tp.y)) && forestW(tp.x, tp.y) > 0.35 && zoneMaskAny(tp.x, tp.y) < 0.05) {   // only in the wooded areas, in the gaps between trees
+        // a boulder half sunk in the snow: a squashed, faceted lump with a few shallow lumps on it
+        float rr = 0.8 + 1.7 * pow(u2f(ihash(h + 12u)), 1.7);
+        if (hd < rr * 1.4 + 0.6) {
+          vec3 qb = vec3(dd.x, p.y - hgt(tp.x, tp.y) - 0.2 * rr, dd.y);
+          float sb = u2f(ihash(h + 13u)) * 6.0;
+          float db = (length(qb * vec3(1.0, 1.35, 1.0)) - rr) * 0.72;
+          db = max(db, dot(qb, normalize(vec3(0.6, 0.7, 0.3 + 0.4 * cos(sb)))) - 0.78 * rr);
+          db = max(db, dot(qb, normalize(vec3(-0.7, 0.5, -0.4 * sin(sb)))) - 0.8 * rr);
+          db += 0.09 * rr * sin(3.1 * qb.x / rr + sb) * sin(2.7 * qb.z / rr + 1.7 * sb) * sin(2.9 * qb.y / rr + 1.0);
+          if (db < best.x) best = vec2(db, 3.3);
+        } else {
+          gRB = min(gRB, hd - rr * 1.4);
         }
       }
     }
@@ -453,11 +559,6 @@ vec2 trees(vec3 p) {
 }
 
 // ---------- the rider ----------
-float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
-  vec3 pa = p - a, ba = b - a;
-  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-  return length(pa - ba * h) - r;
-}
 float sdRoundBox(vec3 p, vec3 b, float r) {
   vec3 q = abs(p) - b;
   return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
@@ -539,6 +640,77 @@ vec2 cabinSDF(vec3 q) {
   return r;
 }
 // distance to the cabin of p's cell. Bounds (far from it) go to gRB, the real shape inside.
+// ---------- old fences, signposts and footbridges ----------
+bool propCell(vec2 cell, out vec2 cp, out float yaw, out float ty) {
+  uvec2 ci = uvec2(mod(cell, 16.0));
+  uint h = ihash((ci.x * 1274126177u) ^ (ci.y * 668265263u) ^ 0x27d4eb2fu);
+  float u = u2f(ihash(h + 1u));
+  ty = u < 0.04 ? 1.0 : (u < 0.07 ? 2.0 : 0.0);   // 1 fence, 2 signpost
+  if (ty < 0.5) return false;                       // most cells hold nothing: leave before the rest of the hashing
+  // the 2 km pattern of cells would repeat; keeping only about half of the 2 km blocks, in a pattern that repeats after 65 km, hides that
+  if (u2f(ihash(uint(mod(floor((cell.y * 128.0 + uRzB) / 2048.0), 32.0)) * 2246822519u + ci.x * 3266489917u)) > 0.45) return false;
+  cp = (cell + vec2(0.25 + 0.5 * u2f(ihash(h + 2u)), 0.25 + 0.5 * u2f(ihash(h + 3u)))) * 128.0;
+  yaw = u2f(ihash(h + 4u)) * 6.2831853;
+  return true;
+}
+bool propSiteOk(vec2 cp) { float dv; return zoneMaskAny(cp.x, cp.y) < 0.02 && forestAt(cp.x, cp.y) < 0.5 && chanW(cp.x, cp.y) < 0.2 && abs(edgeG(cp.x, cp.y)) > 0.35 && avaM(cp.x, cp.y, dv) + dv < 0.01; }
+// ids: 3.4 weathered wood (snow settles on its upper faces in the shading), 3.45 a faded red board
+vec2 propMap(vec3 p) {
+  vec2 res = vec2(1e5, 3.4);
+  if (length(p.xz - uCamPos.xz) > 130.0) return res;
+  vec2 cp = vec2(0.0); float yaw = 0.0, ty = 0.0;
+  vec2 cell = floor(p.xz / 128.0);
+  int act = 0;
+  vec2 hp = vec2(0.0), d = vec2(0.0);
+  if (propCell(cell, cp, yaw, ty)) {
+    d = p.xz - cp;
+    float hd = length(d);
+    if (hd > 11.0) gRB = min(gRB, hd - 8.0);
+    else if (propSiteOk(cp)) { act = 1; hp = cp; }
+  }
+  // a weathered footbridge now and then where a creek is crossed: a plank deck two metres up on stilts, so you can ride underneath
+  if (act == 0) {
+    float bc = floor(p.z / 128.0);
+    uint hb = ihash((uint(mod(bc, 16.0)) * 2891336453u) ^ 0x165667b1u);
+    if (u2f(hb) < 0.10 && u2f(ihash(uint(mod(floor((bc * 128.0 + uRzB) / 2048.0), 32.0)) * 2246822519u + 77u)) < 0.5) {
+      float bz = (bc + 0.25 + 0.5 * u2f(ihash(hb + 1u))) * 128.0;
+      float c0 = chanC(bz) + 1.8 * sin(W * 37.0 * (bz + uRz) + 0.6);
+      float bx = c0 + 1024.0 * floor((p.x - c0) / 1024.0 + 0.5);
+      d = p.xz - vec2(bx, bz);
+      float hd = length(d);
+      if (hd > 9.5) gRB = min(gRB, hd - 7.5);
+      else if (zoneMaskAny(bx, bz) < 0.02) { act = 2; hp = vec2(bx, bz); }
+    }
+  }
+  if (act == 0) return res;
+  float h0 = hgt(hp.x, hp.y);      // one terrain lookup for all three kinds (the terrain function is large)
+  if (act == 1 && ty < 1.5) {
+    float ya = (yaw / 6.2831853 - 0.5) * 1.2;
+    vec2 ax = vec2(cos(ya), sin(ya));
+    float lx = dot(d, ax), lz = dot(d, vec2(-ax.y, ax.x));
+    float ly = p.y - (h0 - 0.36 * ax.y * lx);      // follows the main slope along the fence line
+    float u = lx + 4.5, k = clamp(floor(u / 3.0 + 0.5), 0.0, 3.0), lp = u - 3.0 * k;
+    float post = max(length(vec2(lp, lz)) - 0.08, max(ly - 1.15, -ly - 0.7));
+    float rail = min(sdBoxF(vec3(lx, ly - 0.55, lz), vec3(4.5, 0.04, 0.035)), sdBoxF(vec3(lx, ly - 0.95, lz), vec3(4.5, 0.04, 0.035)));
+    res = vec2(min(post, rail) * 0.9, 3.4);
+  } else if (act == 1) {
+    float cy = cos(yaw), sy = sin(yaw);
+    vec3 q = vec3(d.x * cy + d.y * sy, p.y - h0, -d.x * sy + d.y * cy);
+    float post = max(length(q.xz) - 0.07, max(q.y - 2.3, -q.y - 0.7));
+    float board = sdBoxF(q - vec3(0.0, 2.0, 0.0), vec3(0.55, 0.14, 0.03));
+    res = post < board ? vec2(post * 0.9, 3.4) : vec2(board * 0.9, 3.45);
+  } else {
+    vec3 q = vec3(d.x, p.y - (h0 - 0.36 * d.y), d.y);
+    vec3 qf = vec3(abs(q.x), q.y, abs(q.z));
+    float deck = sdBoxF(q - vec3(0.0, 1.9, 0.0), vec3(6.2, 0.07, 1.25));
+    float beam = sdBoxF(qf - vec3(0.0, 1.72, 1.15), vec3(6.2, 0.13, 0.05));
+    float stilt = sdCapsule(qf, vec3(5.0, -0.8, 1.05), vec3(5.0, 1.9, 1.05), 0.14);
+    float hr = sdBoxF(qf - vec3(0.0, 2.85, 1.2), vec3(6.2, 0.04, 0.04));
+    res = vec2(min(min(deck, beam), min(stilt, hr)) * 0.9, 3.4);
+  }
+  return res;
+}
+
 vec2 cabinMap(vec3 p) {
   vec2 cp; float yaw;
   vec2 cell = floor(p.xz / 256.0);
@@ -600,6 +772,7 @@ vec2 mapK(vec3 p, float kT) {
   if (hh0 < 20.0) {
     vec2 cb = cabinMap(p);
     if (cb.x < r.x) r = cb;
+    if (hh0 < 5.0) { vec2 pr = propMap(p); if (pr.x < r.x) r = pr; }
   }
   gReal = r.x <= gRB;
   if (!gSh) r.x = min(r.x, gRB);
@@ -878,7 +1051,7 @@ vec3 shade(vec3 ro, vec3 rd, float t, float id) {
     alb = mix(alb, vec3(0.78, 0.87, 1.0), 0.4 * chanW(p.x, p.z));   // the river bed: slightly cooler, smoother snow
     // landforms: ice on the tarn, rock on steep gorge walls and stair faces, bare ground where the snow is thin, soft powder
     float zt; float zw = zoneMask(p.x, p.z, zt);
-    float iceM = 0.0, rockM = 0.0;
+    float iceM = 0.0, rockM = 0.0, creekK = 0.0;
     if (zw > 0.0) {
       vec2 zd; float zR, zsd; zoneParams(p.x, p.z, zt, zd, zR, zsd);
       float stp = 1.0 - smoothstep(0.55, 0.86, n.y + 0.25 * (vnoise(p.xz * 1.3) - 0.5));
@@ -894,18 +1067,29 @@ vec3 shade(vec3 ro, vec3 rd, float t, float id) {
       vec3 ice = mix(vec3(0.16, 0.30, 0.42), vec3(0.88, 0.94, 1.02), max(dust, crack * 0.35));
       alb = mix(alb, ice, iceM);
     }
+    {
+      float opn; float cmk = creekM(p.x, p.z, opn);
+      if (cmk > 0.02) {
+        vec3 cic = mix(vec3(0.62, 0.78, 0.92), vec3(0.92, 0.96, 1.02), 0.5 + 0.5 * vnoise(p.xz * vec2(1.5, 0.7)));
+        alb = mix(alb, cic, cmk * 0.85); iceG = max(iceG, cmk * 0.55);
+      }
+      if (opn > 0.02) { alb = mix(alb, vec3(0.02, 0.05, 0.08), opn); iceG = max(iceG, opn); }
+      creekK = cmk;
+      float avd; float avt = avaM(p.x, p.z, avd);
+      float avs = max(avt, avd);
+      if (avs > 0.02) {
+        alb = mix(alb, vec3(0.66, 0.72, 0.84) * (0.72 + 0.5 * vnoise(p.xz * 4.5)), 0.55 * avs);
+        n = normalize(n + 0.2 * avd * vec3(vnoise(p.xz * 2.7) - 0.5, 0.0, vnoise(p.xz * 2.7 + 9.0) - 0.5) * (1.0 - smoothstep(30.0, 90.0, t)));
+      }
+      // steep faces (the big drops, chute walls) show bare rock
+      if (n.y < 0.78) rockM = max(rockM, 0.95 * (1.0 - smoothstep(0.52, 0.74, n.y + 0.15 * (vnoise(p.xz * 1.3) - 0.5))));
+    }
     if (rockM > 0.0) {
-      float band = 0.5 + 0.5 * sin(p.y * 2.6 + 2.0 * vnoise(p.xz * 0.35));
+      float band = 0.5 + 0.5 * sin(p.y * (2.0 + 1.6 * vnoise(p.xz * 0.12)) + 7.0 * vnoise(p.xz * 0.3 + p.y * 0.25));
       vec3 rk = mix(vec3(0.36, 0.26, 0.21), vec3(0.19, 0.17, 0.20), band) * (0.75 + 0.5 * vnoise(p.xz * 4.0 + p.y));
       alb = mix(alb, rk, rockM * 0.96);
     }
     alb *= 1.0 + vec3(0.025, 0.0, -0.035) * bioAt(p.x, p.z);   // meadows run a touch warmer, high rock country a touch colder
-    // fine wind ripples across the open snow near the camera, a few centimetres high, catching the low sun
-    if (uDbg2.x > 0.5 && t < 42.0 && iceM < 0.5 && rockM < 0.5 && n.y > 0.8) {
-      float ra = p.z * 4.6 + p.x * 0.9 + 2.4 * vnoise(p.xz * 0.45);
-      float fadeR = (1.0 - smoothstep(12.0, 42.0, t)) * (0.5 + 0.5 * vnoise(p.xz * 0.12 + 5.0));
-      n = normalize(n + vec3(0.25 * cos(ra * 0.7), 0.0, cos(ra)) * 0.035 * fadeR);
-    }
     float mound = rockBump(p.x, p.z);
     float steep = 1.0 - smoothstep(0.62, 0.9, n.y + 0.3 * (vnoise(p.xz * 2.2) - 0.5));
     alb = mix(alb, vec3(0.30, 0.29, 0.33) * (0.75 + 0.5 * vnoise(p.xz * 6.0)), smoothstep(0.1, 0.35, mound) * steep * 0.92);
@@ -914,7 +1098,7 @@ vec3 shade(vec3 ro, vec3 rd, float t, float id) {
     farT = smoothstep(110.0, 220.0, t) * forest * (0.7 + 0.3 * vnoise(p.xz * 0.22)) * 0.92;
     if (uDbg2.x > 0.5 && t < 70.0 && length(p.xz - uRPos.xz) < 52.0) {
       float pty; float pzw = zoneMask(p.x, p.z, pty); float pwd = (pty > 2.5 && pty < 3.5) ? pzw : 0.0;
-      if (!(pty < 0.5 && pzw > 0.4)) trackDeform(p.xz, n, grooveOcc, pwd);
+      if (!(pty < 0.5 && pzw > 0.4) && creekK < 0.4) trackDeform(p.xz, n, grooveOcc, pwd);
       alb *= mix(vec3(1.0), vec3(0.80, 0.88, 1.0), clamp(grooveOcc * 1.3, 0.0, 1.0));   // the packed snow in a groove glows slightly blue
     }
   } else {
@@ -922,7 +1106,16 @@ vec3 shade(vec3 ro, vec3 rd, float t, float id) {
     if (id < 2.5) {
       float snow = smoothstep(0.30, 0.68, n.y + 0.12 * vnoise(p.xz * 1.7 + p.y));
       alb = mix(vec3(0.030, 0.095, 0.075) * (0.8 + 0.5 * vnoise(p.xz * 3.0)), vec3(0.92, 0.94, 1.0), snow * 0.93);
-    } else if (id < 3.5) alb = vec3(0.09, 0.055, 0.04);
+    } else if (id < 3.5) {
+      if (id < 3.05) alb = vec3(0.09, 0.055, 0.04);
+      else if (id < 3.15) alb = mix(vec3(0.86, 0.85, 0.80), vec3(0.10, 0.09, 0.09), step(0.72, vnoise(vec2(p.y * 4.0, p.x + p.z) * 1.7)));   // birch bark with dark bands
+      else if (id < 3.25) alb = vec3(0.36, 0.33, 0.32) * (0.7 + 0.5 * vnoise(vec2(p.y * 6.0, p.x + p.z)));
+      else if (id > 3.35) {
+        vec3 wd = id > 3.42 ? vec3(0.52, 0.19, 0.12) : vec3(0.30, 0.25, 0.21) * (0.7 + 0.5 * vnoise(vec2(p.x + p.z, p.y * 5.0) * 3.0));
+        alb = mix(wd, vec3(0.92, 0.94, 1.0), smoothstep(0.5, 0.82, n.y) * 0.9);
+      }
+      else alb = mix(vec3(0.27, 0.25, 0.28) * (0.7 + 0.6 * vnoise(p.xz * 3.0 + p.y * 2.0)), vec3(0.92, 0.94, 1.0), smoothstep(0.66, 0.9, n.y + 0.25 * vnoise(p.xz * 2.5 + p.y)));   // boulder with a snow cap
+    }
     else if (id < 4.5) alb = vec3(0.80, 0.17, 0.10);
     else if (id < 5.5) alb = vec3(0.07, 0.09, 0.17);
     else if (id < 6.5) alb = mix(vec3(0.10, 0.50, 0.52), vec3(0.95, 0.85, 0.68), smoothstep(0.55, 0.7, abs(dot(p - uRPos, uRZ))));
@@ -1177,10 +1370,42 @@ function edgeG(x, z) { return 0.6 * sin(W * 6.875 * z + W * 2 * x + 0.4) + 0.4 *
 function wrapP(d, P) { return d - P * Math.floor(d / P + 0.5); }
 function chanC(z) { return 35 * sin(W * 4.125 * z + 0.4) + 10 * sin(W * 11.125 * z + 2.0) + 300; }
 function chanW(x, z) { var d = wrapP(x - chanC(z), 1024); return Math.exp(-(d * d) / 81); }
+function creekM(x, z) {
+  var d = wrapP(x - chanC(z) - 1.8 * sin(W * 37 * z + 0.6), 1024);
+  return 1 - sm(1.4, 3.2, Math.abs(d));
+}
+var _deb = 0;
+function avaM(x, z) {
+  _deb = 0;
+  return 0; // avalanche paths removed
+  var lane = Math.floor(x / 128);
+  var h = ihash((Math.imul(((lane % 16) + 16) % 16, 2654435761) ^ 0x51ed270b) >>> 0);
+  if (u2f(h) > 0.08 + 0.2 * sm(0, 0.8, bioAt(lane * 128, z))) return 0;
+  var ph = u2f(ihash((h + 2) >>> 0)) * 6.2831853, p0 = u2f(ihash((h + 4) >>> 0));
+  var xc = (lane + 0.25 + 0.5 * u2f(ihash((h + 1) >>> 0))) * 128 + 9 * sin(W * 11 * z + ph) + 5 * sin(W * 29 * z + 2 * ph);
+  var wv = 7 + 5 * u2f(ihash((h + 3) >>> 0));
+  var d = Math.abs(x - xc);
+  var u = z * 3 / 2048 + p0; u -= Math.floor(u);
+  var trough = sm(0, 0.12, u) * (1 - sm(0.62, 0.75, u)) * (1 - sm(wv * 0.6, wv, d));
+  _deb = sm(0.7, 0.78, u) * (1 - sm(0.92, 1.0, u)) * (1 - sm(wv * 0.8, wv * 1.7, d));
+  return trough;
+}
+function avaH(x, z) {
+  var tr = avaM(x, z), deb = _deb;
+  if (tr + deb <= 0) return 0;
+  return -0.7 * tr + deb * (0.3 + 0.38 * sin(W * 97 * z + 1.0 + 2.2 * sin(W * 41 * x + 0.3)) * sin(W * 59 * x + 0.4 + 2.0 * sin(W * 37 * z)) + 0.2 * sin(W * 67 * x + W * 43 * z + 2.5));
+}
+function bigRelief(x, z) {
+  var h = 26 * sin(W * x + 1.2 + 1.5 * sin(W * 0.0625 * z));
+  var u = z / 16384 + 0.003 * sin(W * 3 * x + 1.0) + 0.005 * sin(W * 7 * x);
+  var ph = u - Math.floor(u);
+  var m = sm(0.3, 0.7, 0.5 + 0.5 * sin(W * 3 * x + 0.4)) * sm(0.0, 0.6, bioAt(x, z));
+  return h + 14 * m * (ph - sm(0.995, 1.0, ph));
+}
 function ridgeC(z) { return 50 * sin(W * 2.875 * z + 2.0) + 12 * sin(W * 9.75 * z + 0.7) + 120; }
 function ridgeW(x, z) { var d = wrapP(x - ridgeC(z), 512); return Math.exp(-(d * d) / 36); }
 function forestW0(x, z) { return sm(0.57, 0.75, forestAt(x, z)) * (1 - sm(0.2, 0.6, chanW(x, z))); }
-function forestW(x, z) { return sm(0.57, 0.75, forestAt(x, z)) * (1 - sm(0.2, 0.6, chanW(x, z))) * (1 - sm(0.1, 0.5, zoneClear(x, z))); }
+function forestW(x, z) { var av = avaM(x, z), dv = _deb; return sm(0.57, 0.75, forestAt(x, z)) * (1 - sm(0.2, 0.6, chanW(x, z))) * (1 - sm(0.1, 0.5, zoneClear(x, z))) * (1 - sm(0.1, 0.5, Math.max(av, dv))); }
 function roughAt(g, x, z) { return Math.max(1 - sm(0.15, 0.55, Math.abs(g)), forestW0(x, z)); }
 function rollH(x, z) {
   var u = 22.25 * z / 2048 + 5 * x / 2048 + 0.35 * sin(W * 2.875 * z + W * 2 * x + 1.0);
@@ -1228,8 +1453,8 @@ function updateZones(camX, camZ) {
   zList.sort(function (a, b) { return a.d - b.d; });
 }
 function zLen(dx, dz, sd) { return Math.hypot(dx, dz) + 6 * sin(dx * 0.07 + sd * 10) * sin(dz * 0.06 + sd * 7); }
-function gorgeX(dz, sd) { return 16 * sin(dz * 0.04 + sd * 6); }
-function gorgeD(dx, dz, sd) { return Math.abs(dx - gorgeX(dz, sd)) + 2.5 * sin(dz * 0.23 + sd * 20) + 1.5 * sin(dz * 0.51 + dx * 0.2); }
+function gorgeX(dz, sd) { return 16 * sin(dz * 0.04 + sd * 6) + 6 * sin(dz * 0.093 + sd * 11 + 1.0); }
+function gorgeD(dx, dz, sd) { return Math.abs(dx - gorgeX(dz, sd)) + 1.6 * sin(dz * 0.23 + sd * 20 + 1.5 * sin(dz * 0.071 + dx * 0.05)) + 1.1 * sin(dz * 0.37 + dx * 0.17 + 2.0 * sin(dz * 0.043 + sd * 3)); }
 function zoneMaskAny(x, z) {
   if (!zoneParams(x, z)) return 0;
   var ty = _z.ty, dx = _z.dx, dz = _z.dz, R = _z.R, sd = _z.sd;
@@ -1237,13 +1462,18 @@ function zoneMaskAny(x, z) {
   return 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
 }
 function zoneClear(x, z) { var w = zoneMaskAny(x, z); return (_z.ty > 2.5 && _z.ty < 3.5) ? 0 : w; }
-function iceAt(x, z) { var w = zoneMaskAny(x, z); return _z.ty === 0 ? w : 0; }
+function iceAt(x, z) { var w = zoneMaskAny(x, z); return Math.max(_z.ty === 0 ? w : 0, creekM(x, z)); }
 function powderAt(x, z) { var w = zoneMaskAny(x, z); return (_z.ty > 2.5 && _z.ty < 3.5) ? w : 0; }
 function rockLump(x, z) {
-  var l = sin(W * 45 * x + 0.5) * sin(W * 39 * z + 1.0) + 0.4 * sin(W * 91 * x + W * 77 * z);
-  return 2.2 * sm(0.25, 0.95, l) + 0.7 * sm(0.3, 0.9, sin(W * 131 * x + 1.7) * sin(W * 127 * z + 0.3));
+  var l = sin(W * 45 * x + 0.5 + 2.4 * sin(W * 11 * z + W * 5 * x)) * sin(W * 39 * z + 1.0 + 2.4 * sin(W * 9 * x + 0.7)) + 0.4 * sin(W * 91 * x + W * 77 * z + 2.0 * sin(W * 13 * x));
+  return 2.2 * sm(0.25, 0.95, l) + 0.5 * sm(0.35, 0.9, sin(W * 131 * x + 1.7 + 2.6 * sin(W * 23 * z)) * sin(W * 127 * z + 0.3 + 2.6 * sin(W * 29 * x + 1.0)));
 }
 var _calm = 0;
+function edgeLip(g, x) {
+  var cor = 1.5 * (0.55 + 0.45 * sin(W * 11 * x + 0.9)) * Math.exp(-Math.pow((g + 0.21) / 0.055, 2));
+  var bank = 1.0 * (0.5 + 0.5 * sin(W * 7 * x + 2.0)) * Math.exp(-Math.pow((g - 0.36) / 0.12, 2));
+  return cor + bank;
+}
 function hgtCore(x, z) {
   var h = -SLOPE * z;
   var hs = 9 * sin(W * 2.25 * z + 1.0) + 4.5 * sin(W * 4.75 * z + 3.1)
@@ -1252,7 +1482,8 @@ function hgtCore(x, z) {
          + 5.0 * sin(W * 7 * x + 2.0) * sin(W * 6.125 * z + 0.5);
   h += hs * (1 + 0.5 * sin(W * 0.5 * z + 0.9) * sin(W * x + 2.0) + 0.22 * bioAt(x, z));
   h += 85 * sin(W * 0.25 * z + 1.3) + 40 * sin(W * 0.375 * z + 4.0);
-  h -= 6.0 * sm(-0.25, 0.25, edgeG(x, z));
+  var eg = edgeG(x, z);
+  h -= 6.0 * sm(-0.25, 0.25, eg); h += edgeLip(eg, x); h += bigRelief(x, z);
   return h + rollH(x, z) - 2.4 * chanW(x, z) + 1.9 * ridgeW(x, z);
 }
 function zoneApply(x, z, h) {
@@ -1264,7 +1495,8 @@ function zoneApply(x, z, h) {
     if (w > 0) { h += (hgtCore(x - dx, z - dz) - 0.16 * dz - h) * w; _calm = w; }
   } else if (ty < 1.5) {
     var env = 1 - sm(0.55, 0.95, Math.abs(dz) / R);
-    h -= 9 * env * (1 - sm(7, 19, gorgeD(dx, dz, sd)));
+    var gwv = 0.5 + 0.5 * sin(dz * 0.033 + sd * 9);
+    h -= (6 + 4 * (0.5 + 0.5 * sin(dz * 0.021 + sd * 5))) * env * (1 - sm(6 + 3 * gwv, 17 + 5 * gwv, gorgeD(dx, dz, sd)));
   } else if (ty < 2.5) {
     w = 1 - sm(0.55, 1.0, zLen(dx, dz, sd) / R);
     var u = dz / 18 + 0.2 * sin(dx * 0.03 + sd * 9), ph = u - Math.floor(u);
@@ -1291,6 +1523,14 @@ function zoneApply(x, z, h) {
   }
   return h;
 }
+function windRidge(x, z) {
+  var wpat = sm(0.3, 0.75, sin(W * 5 * x + 0.4) * sin(W * 4 * z + 1.1) + 0.25 * sin(W * 9 * x + W * 7 * z));
+  if (wpat <= 0) return 0;
+  var a = sin(W * 61 * z + 2.0 * sin(W * 7 * x + W * 3 * z + 0.5));
+  var b = sin(W * 37 * x + W * 53 * z + 1.3 + 1.5 * sin(W * 11 * z));
+  var c = sin(W * 83 * z - W * 29 * x + 4.0 + 2.0 * sin(W * 17 * x));
+  return 0.24 * wpat * (0.5 * a + 0.3 * b + 0.2 * c);
+}
 function hgt0(x, z) {
   var g = edgeG(x, z), rg = roughAt(g, x, z);
   var h = zoneApply(x, z, hgtCore(x, z)), cm = _calm;
@@ -1298,8 +1538,8 @@ function hgt0(x, z) {
   var fine = 1.5 * sin(W * 19 * z + 1.7 - W * 20 * x) + 0.55 * sin(W * 41 * z + 0.9 + W * 33 * x)
            + 1.1 * sin(W * 29 * x + W * 13 * z + 2.0) + 2.2 * sin(W * 21 * x + 1.1) * sin(W * 17 * z + 0.4);
   var env = sm(0.55, 0.95, sin(W * 11 * z + 2.5 + W * 3 * x));
-  fine += env * 1.8 * sin(W * 68 * z + W * 2 * x);
-  return h + fine * (0.3 + 0.7 * rg) * (1 - cm);
+  fine += env * 1.2 * sin(W * 68 * z + W * 2 * x + 2.4 * sin(W * 9 * x + W * 13 * z));
+  return h + fine * (0.3 + 0.7 * rg) * (1 - cm) + windRidge(x, z) * (1 - cm) + avaH(x, z);
 }
 // ---- snow mounds, same layout as the shader ----
 function bumpOf(dx, dz, rx, ry) { var a = Math.max(1 - (dx * dx + dz * dz) / (rx * rx), 0); return ry * a * a; }
@@ -1345,7 +1585,16 @@ function treeAtCell(cx, cz) {
   var h = ihash((Math.imul(ix, 73856093) ^ Math.imul(iz, 19349663)) >>> 0);
   var r1 = u2f(ihash((h + 1) >>> 0)), r2 = u2f(ihash((h + 2) >>> 0)), r3 = u2f(ihash((h + 3) >>> 0)), r4 = u2f(ihash((h + 4) >>> 0));
   var tx = (cx + 0.5 + (r1 - 0.5) * 0.3) * CELL, tz = (cz + 0.5 + (r2 - 0.5) * 0.3) * CELL;
-  if (r3 < forestW(tx, tz) * 0.85) return { x: tx, z: tz, s: 0.4 + 0.85 * Math.pow(r4, 1.5) };
+  if (r3 < 0.85 && r3 < forestW(tx, tz) * 0.85) {
+    var rtp = u2f(ihash((h + 6) >>> 0));
+    var typ = rtp < 0.50 ? 0 : (rtp < 0.72 ? 1 : (rtp < 0.80 ? 2 : (rtp < 0.88 ? 3 : (rtp < 0.93 ? 4 : 5))));
+    var s = 0.4 + 0.85 * Math.pow(r4, 1.5);
+    return { x: tx, z: tz, s: s, rad: typ === 3 ? 0.17 * s : (typ === 4 ? 0.2 * s : (typ === 5 ? 0.8 * s : 0.32 * s)) };
+  }
+  if (u2f(ihash((h + 11) >>> 0)) < 0.12 + 0.2 * sm(-0.1, 0.8, bioAt(tx, tz)) && forestW(tx, tz) > 0.35 && zoneMaskAny(tx, tz) < 0.05) {
+    var rr = 0.8 + 1.7 * Math.pow(u2f(ihash((h + 12) >>> 0)), 1.7);
+    return { x: tx, z: tz, s: rr, rad: 0.85 * rr };
+  }
   return null;
 }
 function treesNear(x, z, range) {
@@ -1378,13 +1627,59 @@ function pushFromCabin(x, z, r) {
     _pc.nx = nlx * cy + nlz * sy; _pc.nz = -nlx * sy + nlz * cy; _pc.hit = true;
   }
 }
+// ---- fences, signposts and footbridges: mirror of the shader (collision only) ----
+function propAtCell(cx, cz) {
+  var ix = ((cx % 16) + 16) % 16, iz = ((cz % 16) + 16) % 16;
+  var h = ihash(((Math.imul(ix, 1274126177) ^ Math.imul(iz, 668265263)) ^ 0x27d4eb2f) >>> 0);
+  var u = u2f(ihash((h + 1) >>> 0));
+  var ty = u < 0.04 ? 1 : (u < 0.07 ? 2 : 0);
+  if (!ty) return null;
+  if (u2f(ihash((Math.imul(((Math.floor(cz * 128 / 2048) % 32) + 32) % 32, 2246822519) + Math.imul(ix, 3266489917)) >>> 0)) > 0.45) return null;
+  var x = (cx + 0.25 + 0.5 * u2f(ihash((h + 2) >>> 0))) * 128, z = (cz + 0.25 + 0.5 * u2f(ihash((h + 3) >>> 0))) * 128;
+  var yaw = u2f(ihash((h + 4) >>> 0)) * 6.2831853;
+  var okSite = zoneMaskAny(x, z) < 0.02 && forestAt(x, z) < 0.5 && chanW(x, z) < 0.2 && Math.abs(edgeG(x, z)) > 0.35 && (avaM(x, z) + _deb) < 0.01;
+  if (!okSite) return null;
+  return { ty: ty, x: x, z: z, yaw: yaw };
+}
+function bridgeAtCell(cz, x) {
+  var iz = ((cz % 16) + 16) % 16;
+  var hb = ihash((Math.imul(iz, 2891336453) ^ 0x165667b1) >>> 0);
+  if (!(u2f(hb) < 0.10) || !(u2f(ihash((Math.imul(((Math.floor(cz * 128 / 2048) % 32) + 32) % 32, 2246822519) + 77) >>> 0)) < 0.5)) return null;
+  var bz = (cz + 0.25 + 0.5 * u2f(ihash((hb + 1) >>> 0))) * 128;
+  var c0 = chanC(bz) + 1.8 * sin(W * 37 * bz + 0.6);
+  var bx = c0 + 1024 * Math.floor((x - c0) / 1024 + 0.5);
+  if (!(zoneMaskAny(bx, bz) < 0.02)) return null;
+  return { x: bx, z: bz };
+}
+function pushCircle(cx, cz, rad) {
+  var dx = _pc.x - cx, dz = _pc.z - cz, d = Math.hypot(dx, dz);
+  if (d < rad) {
+    if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+    _pc.nx = dx / d; _pc.nz = dz / d; _pc.x = cx + _pc.nx * rad; _pc.z = cz + _pc.nz * rad; _pc.hit = true;
+  }
+}
+function pushFromProps(x, z, r) {
+  var cx = Math.floor(x / 128), cz = Math.floor(z / 128);
+  for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
+    var p = propAtCell(cx + i, cz + j);
+    if (!p || Math.hypot(_pc.x - p.x, _pc.z - p.z) > 12) continue;
+    if (p.ty === 2) { pushCircle(p.x, p.z, r + 0.12); continue; }
+    var ya = (p.yaw / 6.2831853 - 0.5) * 1.2, ax = Math.cos(ya), az = Math.sin(ya);
+    var t = clamp((_pc.x - p.x) * ax + (_pc.z - p.z) * az, -4.5, 4.5);
+    pushCircle(p.x + ax * t, p.z + az * t, r + 0.07);
+  }
+  var br = bridgeAtCell(cz, x);
+  if (br && Math.hypot(_pc.x - br.x, _pc.z - br.z) < 9) {
+    for (var sx = -1; sx <= 1; sx += 2) for (var sz = -1; sz <= 1; sz += 2) pushCircle(br.x + sx * 5.0, br.z + sz * 1.05, r + 0.16);
+  }
+}
 function pushFromTrees(x, z, r) {
   var cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
   _pc.x = x; _pc.z = z; _pc.hit = false;
   for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) {
     var t = treeAtCell(cx + i, cz + j);
     if (!t) continue;
-    var dx = _pc.x - t.x, dz = _pc.z - t.z, d = Math.hypot(dx, dz), m = r + 0.32 * t.s + 0.1;
+    var dx = _pc.x - t.x, dz = _pc.z - t.z, d = Math.hypot(dx, dz), m = r + t.rad + 0.1;
     if (d < m) {
       if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
       _pc.nx = dx / d; _pc.nz = dz / d;
@@ -1392,6 +1687,7 @@ function pushFromTrees(x, z, r) {
     }
   }
   pushFromCabin(_pc.x, _pc.z, r);
+  pushFromProps(x, z, r);
   return _pc;
 }
 
@@ -1414,6 +1710,7 @@ try {
   var ctx = canvas.getContext('webgl2', { antialias: false, powerPreference: 'high-performance', alpha: false });
   renderer = ctx ? new THREE.WebGLRenderer({ canvas: canvas, context: ctx }) : null;
 } catch (e) { renderer = null; }
+if (renderer) renderer.debug.checkShaderErrors = false;   // do not block on the link status; we poll it ourselves (KHR_parallel_shader_compile) so the page stays responsive
 if (!renderer || !renderer.capabilities.isWebGL2) { document.getElementById('fail').hidden = false; document.getElementById('menu').hidden = true; return; }
 
 var U = {
@@ -1599,10 +1896,11 @@ function renderFrame() {
 
 // adaptive resolution
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
-var pr = Math.min(Math.max(dpr, 1), 1.1);
+var pr = 0.45;   // start cheap and ramp up: the first frames are always the slowest (driver warm-up) and a full-resolution raymarch can freeze the tab for seconds
 var prMax = Math.min(Math.max(dpr, 1) * 1.3, 2.0), prMin = 0.4;
 var qp = parseFloat(new URLSearchParams(location.search).get('pr'));
 if (qp > 0) { pr = prMax = prMin = qp; }
+var warmF = 0;
 var debugOn = qp > 0;
 function resize() {
   if (taa) {
@@ -1643,7 +1941,7 @@ var S = {
 var sp0 = pickSpawn(); S.x = sp0[0]; S.z = sp0[1]; S.y = hgt(S.x, S.z);
 S.camY = S.y + 3;
 var mode = 'menu', time = 0;
-if (debugOn) { window.__taa = taa; window.__S = S; window.__f = forestAt; window.__hgt = hgt; window.__trees = treesNear; window.__chan = chanW; window.__ridge = ridgeW; window.__roll = rollH; window.__fw = forestW; window.__cab = cabinAtCell; window.__sim = simulate; window.__rec = recordTrail; window.__cam = function () { var sp = Math.hypot(S.vx, S.vz); for (var i = 0; i < 90; i++) placeCamera(1 / 60, sp); }; window.__spr = function (dt) { var sp = Math.hypot(S.vx, S.vz); updateSpray(dt, riderBasis(sp), sp); }; window.__rb = rockBump; window.__zp = function (x, z) { var m = zoneMaskAny(x, z); return [_z.ty, m, _z.dx, _z.dz, _z.R]; }; }
+if (debugOn) { window.__taa = taa; window.__S = S; window.__f = forestAt; window.__hgt = hgt; window.__trees = treesNear; window.__chan = chanW; window.__ridge = ridgeW; window.__roll = rollH; window.__fw = forestW; window.__cab = cabinAtCell; window.__sim = simulate; window.__br = bridgeAtCell; window.__prop = propAtCell; window.__creek = creekM; window.__chanC = chanC; window.__rec = recordTrail; window.__cam = function () { var sp = Math.hypot(S.vx, S.vz); for (var i = 0; i < 90; i++) placeCamera(1 / 60, sp); }; window.__spr = function (dt) { var sp = Math.hypot(S.vx, S.vz); updateSpray(dt, riderBasis(sp), sp); }; window.__rb = rockBump; window.__zp = function (x, z) { var m = zoneMaskAny(x, z); return [_z.ty, m, _z.dx, _z.dz, _z.R]; }; }
 var keys = { left: false, right: false, up: false, down: false }, hopReq = false, drag = null, dragSteer = 0;
 
 function curTh() { return Math.hypot(S.vx, S.vz) > 0.8 ? Math.atan2(S.vx, S.vz) : S.th; }
@@ -2017,7 +2315,7 @@ if (debugOn) window.__adv = function (steps, steerIn, vmin) {
 var last = performance.now(), frames = 0, fpsT = 0, cooldown = 0, refreshMs = 17.5;
 function frame(now) {
   requestAnimationFrame(frame);
-  var dt = Math.min(0.05, (now - last) / 1000); last = now;
+  var rawDt = (now - last) / 1000, dt = Math.min(0.05, rawDt); last = now;
   if (dt <= 0) return;
   time += dt;
   var steerIn;
@@ -2075,13 +2373,15 @@ function frame(now) {
   updateAudio(sp);
   // keep the frame rate smooth by trading resolution
   frames++; fpsT += dt; cooldown -= dt;
+  // warm-up: react to a single slow frame at once instead of waiting for the 0.8 s average
+  if (!prof.lock && warmF < 90) { warmF++; if (warmF > 2 && rawDt > 0.045 && pr > prMin) { pr = Math.max(prMin, pr * Math.max(0.6, 0.033 / rawDt)); resize(); cooldown = 0.6; frames = 0; fpsT = 0; } }
   if (fpsT > 0.8) {
     var ms = fpsT / frames * 1000; frames = 0; fpsT = 0;
     // the frame time can never be shorter than the screen's refresh interval, so judge against the shortest seen
     refreshMs = Math.min(Math.max(ms, 5), refreshMs * 1.01 + 0.02, 17.5);
     if (cooldown <= 0 && !prof.lock) {
       if ((ms > Math.max(24, refreshMs * 1.7)) && pr > prMin) { pr = Math.max(prMin, pr * 0.88); resize(); cooldown = 1.2; }
-      else if (ms < refreshMs * 1.18 && pr < prMax) { pr = Math.min(prMax, pr * 1.07); resize(); cooldown = 2.0; }
+      else if (ms < refreshMs * 1.18 && pr < prMax) { var up = pr < 0.8; pr = Math.min(prMax, pr * (up ? 1.12 : 1.07)); resize(); cooldown = up ? 0.9 : 2.0; }
     }
   }
 }
@@ -2109,8 +2409,24 @@ if (debugOn) {
     return [worst, wx, wz, wj, wg, zList.map(function (z) { return [z.x, z.z]; }), row];
   };
 }
-if (window.__prog) window.__prog(0.4);
-requestAnimationFrame(frame);
+// Compile the big shaders in the background: the driver links them on its own threads while the page keeps painting the splash,
+// and the game loop only starts once every program reports done.
+(function startWhenCompiled() {
+  var gl = renderer.getContext(), pe = gl.getExtension('KHR_parallel_shader_compile'), t0 = performance.now(), started = false;
+  function go() { if (started) return; started = true; if (window.__prog) window.__prog(0.4); requestAnimationFrame(frame); }
+  try { renderer.compile(scene, cam); renderer.compile(resScene, cam); renderer.compile(blitScene, cam); } catch (e) { go(); return; }
+  function poll() {
+    var progs = renderer.info.programs || [], done = true, i;
+    if (pe) { for (i = 0; i < progs.length; i++) if (!gl.getProgramParameter(progs[i].program, pe.COMPLETION_STATUS_KHR)) { done = false; break; } }
+    var el = performance.now() - t0;
+    if (window.__prog) window.__prog(0.15 + 0.25 * (1 - Math.exp(-el / 5000)));
+    if (!pe || done || el > 90000) {
+      for (i = 0; i < progs.length; i++) if (!gl.getProgramParameter(progs[i].program, gl.LINK_STATUS)) console.error('shader link failed', gl.getProgramInfoLog(progs[i].program));
+      go();
+    } else setTimeout(poll, 40);
+  }
+  setTimeout(poll, 0);
+})();
 })();
 });});},0);
 </script>
